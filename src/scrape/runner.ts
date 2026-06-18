@@ -31,7 +31,6 @@ import {
 import { buildBioPayload, createLinkResolver, type LinkResolver } from "./linking.js";
 import { parsePlayerBioFromHtml } from "./playerMeta.js";
 import {
-  buildPlayerSeasonRecordsFromPage,
   buildRecordsFromSeasonRows,
   collectAllNcaaSeasons,
   mergeSeasonRows,
@@ -103,16 +102,57 @@ async function processPlayer(
   cacheEntry: CachedPlayerSeasons["players"][string] | undefined,
   linkResolver: LinkResolver,
   includeFgPct: boolean,
-): Promise<{ ok: boolean; linked: boolean; seasonRows: number; playerId?: number }> {
+): Promise<{ ok: boolean; linked: boolean; seasonRows: number; playerId?: number; skipped?: boolean }> {
   const displayName = cacheEntry?.displayName ?? `Player-${playerId}`;
-  const html = await fetchPlayerHtml(client, options, playerId, displayName);
+  let indexSeasons = cacheEntry?.seasons ?? [];
 
-  const bio: NcaaPlayerBio = parsePlayerBioFromHtml(
-    html,
-    playerId,
-    cacheEntry?.displayName,
-    cacheEntry?.position ?? null,
-  );
+  let bio: NcaaPlayerBio;
+  let mergedSeasons = mergeSeasonRows(indexSeasons);
+
+  if (options.backfill && indexSeasons.length > 0) {
+    // Full discovery already merged every index season for this player (2011+).
+    bio = {
+      playerId,
+      displayName: cacheEntry!.displayName,
+      birthDate: null,
+      position: cacheEntry!.position,
+      heightCm: null,
+      weightKg: null,
+      hometown: null,
+    };
+  } else {
+    const html = await fetchPlayerHtml(client, options, playerId, displayName);
+
+    bio = parsePlayerBioFromHtml(
+      html,
+      playerId,
+      cacheEntry?.displayName,
+      cacheEntry?.position ?? null,
+    );
+
+    const profileSeasons = await collectAllNcaaSeasons(client, playerId, html);
+    mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
+
+    // During backfill, discovery already scanned every season index — never re-fetch all 20.
+    if (mergedSeasons.length === 0 && !options.backfill) {
+      console.log(`[index] ${playerId}: no NCAA seasons on profile — scanning season indexes...`);
+      indexSeasons = await fetchIndexSeasonsForPlayer(client, playerId);
+      mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
+      if (indexSeasons.length) {
+        console.log(`[index] ${playerId}: found ${indexSeasons.length} season(s) on index`);
+      }
+    } else if (profileSeasons.length > indexSeasons.length) {
+      console.log(
+        `[profile] ${playerId}: ${indexSeasons.length} index seasons + ` +
+          `${profileSeasons.length} profile seasons → ${mergedSeasons.length} merged`,
+      );
+    }
+  }
+
+  if (mergedSeasons.length === 0) {
+    console.log(`[skip] ${playerId} ${bio.displayName}: no stat rows`);
+    return { ok: true, linked: false, seasonRows: 0, skipped: true };
+  }
 
   // Stats-only ingest: never send scraped or cached bio fields to Hoop Central.
   const playerFields: HoopCentralIngestPayload["player"] = {
@@ -157,34 +197,11 @@ async function processPlayer(
     );
   }
 
-  let indexSeasons = cacheEntry?.seasons ?? [];
-  const profileSeasons = await collectAllNcaaSeasons(client, playerId, html);
-  let mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
-
-  if (mergedSeasons.length === 0) {
-    console.log(`[index] ${playerId}: no NCAA seasons on profile — scanning season indexes...`);
-    indexSeasons = await fetchIndexSeasonsForPlayer(client, playerId);
-    mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
-    if (indexSeasons.length) {
-      console.log(`[index] ${playerId}: found ${indexSeasons.length} season(s) on index`);
-    }
-  }
-
-  if (profileSeasons.length > indexSeasons.length) {
-    console.log(
-      `[profile] ${playerId}: ${indexSeasons.length} index seasons + ` +
-        `${profileSeasons.length} profile seasons → ${mergedSeasons.length} merged`,
-    );
-  }
-
-  const records =
-    mergedSeasons.length > 0
-      ? buildRecordsFromSeasonRows(
-          playerId,
-          cacheEntry?.displayName ?? bio.displayName,
-          mergedSeasons,
-        )
-      : await buildPlayerSeasonRecordsFromPage(client, playerId, html, bio.displayName);
+  const records = buildRecordsFromSeasonRows(
+    playerId,
+    cacheEntry?.displayName ?? bio.displayName,
+    mergedSeasons,
+  );
 
   const seasonResult = await ingestSeasonRecords(
     ingest,
@@ -317,7 +334,7 @@ export async function runScrape(
       if (result.ok) {
         summary.succeeded += 1;
         summary.seasonRows += result.seasonRows;
-        if (!options.dryRun && result.seasonRows > 0) {
+        if (!options.dryRun && (result.seasonRows > 0 || result.skipped)) {
           markSlugComplete(checkpoint, playerId, options.checkpointPath);
         }
       } else {
