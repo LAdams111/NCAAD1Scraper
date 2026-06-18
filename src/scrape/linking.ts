@@ -12,11 +12,32 @@ export interface LinkResolver {
     playerId: string,
     displayName: string,
     birthDate: string | null,
+    seasonLabels?: string[],
   ): Promise<LinkTarget | null>;
   rememberLink(playerId: string, target: LinkTarget): void;
 }
 
 export const LINK_SOURCES = ["balldontlie", "basketball-reference-gleague"] as const;
+
+/** Would this birth year plausibly play in these college season labels? */
+export function isPlausibleCollegeAge(
+  birthDate: string,
+  seasonLabels: string[],
+): boolean {
+  const birthYear = Number.parseInt(birthDate.slice(0, 4), 10);
+  if (Number.isNaN(birthYear)) return false;
+
+  const seasonYears = seasonLabels
+    .map((label) => Number.parseInt(label.split("-")[0], 10))
+    .filter((year) => !Number.isNaN(year));
+  if (!seasonYears.length) return false;
+
+  const minSeasonYear = Math.min(...seasonYears);
+  const maxSeasonYear = Math.max(...seasonYears);
+  const ageAtStart = minSeasonYear - 1 - birthYear;
+  const ageAtEnd = maxSeasonYear - birthYear;
+  return ageAtStart >= 17 && ageAtEnd <= 32;
+}
 
 export function buildNameLookup(players: HcPlayerStatus[]): Map<string, HcPlayerStatus[]> {
   const byName = new Map<string, HcPlayerStatus[]>();
@@ -35,6 +56,7 @@ export function matchExternalId(
   displayName: string,
   birthDate: string | null,
   byName: Map<string, HcPlayerStatus[]>,
+  seasonLabels: string[] = [],
 ): string | null {
   const key = normalizeName(displayName);
   const candidates = byName.get(key);
@@ -46,8 +68,44 @@ export function matchExternalId(
     if (dobMatches.length > 1) return null;
   }
 
+  if (seasonLabels.length) {
+    const plausible = candidates.filter(
+      (c) => c.birthDate && isPlausibleCollegeAge(c.birthDate, seasonLabels),
+    );
+    if (plausible.length === 1) return plausible[0].externalId;
+    return null;
+  }
+
   if (candidates.length === 1) return candidates[0].externalId;
   return null;
+}
+
+function findCandidate(
+  byName: Map<string, HcPlayerStatus[]>,
+  displayName: string,
+  externalId: string,
+): HcPlayerStatus | undefined {
+  return (byName.get(normalizeName(displayName)) ?? []).find(
+    (candidate) => candidate.externalId === externalId,
+  );
+}
+
+function cachedLinkIsValid(
+  target: LinkTarget,
+  displayName: string,
+  birthDate: string | null,
+  seasonLabels: string[],
+  byName: Map<string, HcPlayerStatus[]>,
+): boolean {
+  const candidate = findCandidate(byName, displayName, target.externalId);
+  if (!candidate) return false;
+  if (birthDate) return candidate.birthDate === birthDate;
+  if (seasonLabels.length) {
+    return candidate.birthDate
+      ? isPlausibleCollegeAge(candidate.birthDate, seasonLabels)
+      : false;
+  }
+  return true;
 }
 
 function parseCachedLink(raw: string): LinkTarget | null {
@@ -78,13 +136,23 @@ export function createLinkResolver(options: {
   }
 
   return {
-    async resolveLinkTarget(playerId, displayName, birthDate) {
+    async resolveLinkTarget(playerId, displayName, birthDate, seasonLabels = []) {
       const cached = linkCache.mappings[playerId];
-      if (cached) return parseCachedLink(cached);
+      if (cached) {
+        const target = parseCachedLink(cached);
+        if (target) {
+          const lookup = await getLookup(target.source);
+          if (cachedLinkIsValid(target, displayName, birthDate, seasonLabels, lookup)) {
+            return target;
+          }
+          delete linkCache.mappings[playerId];
+          saveLinkCache(options.linkCachePath, linkCache);
+        }
+      }
 
       for (const source of LINK_SOURCES) {
         const lookup = await getLookup(source);
-        const externalId = matchExternalId(displayName, birthDate, lookup);
+        const externalId = matchExternalId(displayName, birthDate, lookup, seasonLabels);
         if (externalId) return { source, externalId };
       }
 

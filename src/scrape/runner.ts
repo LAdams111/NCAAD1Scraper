@@ -166,6 +166,7 @@ async function processPlayer(
     playerId,
     bio.displayName,
     bio.birthDate,
+    mergedSeasons.map((season) => season.seasonLabel),
   );
 
   const linkPayload = buildBioPayload(bio, linkTarget ?? undefined);

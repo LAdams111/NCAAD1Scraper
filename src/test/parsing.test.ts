@@ -12,7 +12,7 @@ import {
   parsePlayerBioFromHtml,
   parseUsbasketBirthDate,
 } from "../scrape/playerMeta.js";
-import { matchBdlExternalId, buildBdlLookup } from "../scrape/linking.js";
+import { matchBdlExternalId, buildBdlLookup, isPlausibleCollegeAge, matchExternalId } from "../scrape/linking.js";
 import { normalizeSeasonLabel, calcPct } from "../utils/season.js";
 
 describe("season utils", () => {
@@ -115,5 +115,23 @@ describe("player bio parsing", () => {
     ]);
     assert.equal(matchBdlExternalId("Darius Acuff", "2006-11-16", lookup), "123");
     assert.equal(matchBdlExternalId("Darius Acuff", null, lookup), null);
+  });
+
+  it("rejects cross-source link when only name matches wrong era", () => {
+    const lookup = buildBdlLookup([
+      {
+        playerId: 7302,
+        externalId: "46392457",
+        displayName: "Chris Cooper",
+        birthDate: "1926-09-29",
+        seasons: [],
+      },
+    ]);
+    assert.equal(
+      matchExternalId("Chris Cooper", null, lookup, ["2010-11", "2011-12"]),
+      null,
+    );
+    assert.ok(isPlausibleCollegeAge("1990-01-17", ["2010-11", "2011-12"]));
+    assert.ok(!isPlausibleCollegeAge("1926-09-29", ["2010-11", "2011-12"]));
   });
 });
