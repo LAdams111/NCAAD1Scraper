@@ -1,0 +1,30 @@
+{
+  "name": "scraper-ncaa-d1",
+  "version": "1.0.0",
+  "description": "NCAA Division I men's basketball player-season scraper for Hoop Central via usbasket.com",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test dist/test/*.test.js",
+    "test:build": "npm run build && npm test",
+    "start": "node dist/index.js",
+    "scrape": "node dist/index.js",
+    "scrape:backfill": "node dist/index.js --backfill",
+    "scrape:dry-run": "node dist/index.js --dry-run"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

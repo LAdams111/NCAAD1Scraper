@@ -141,3 +141,9 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Scraper runtime artifacts
+ncaa-*.cache.json
+scrape-ncaa-backfill.checkpoint.json
+scrape-ncaa-backfill.log
+tmp-*.html
