@@ -556,7 +556,13 @@ interface CareerLineMeta {
 }
 
 function normalizeCareerLineBody(body: string): string {
-  return body.replace(/^\$[\d,]+:\s*/i, "").trim();
+  return body.replace(/^\$[\d,\s]+:\s*/i, "").trim();
+}
+
+function inferCareerLeagueFromTeamName(teamName: string): string {
+  if (/\bU21\b/i.test(teamName)) return "LNB U21";
+  if (/\bU18\b|\bU19\b|\bU17\b/i.test(teamName)) return "LNB Youth";
+  return "Unknown";
 }
 
 function inferCareerLeagueFromParens(parenGroups: string[], teamName: string): string {
@@ -615,11 +621,32 @@ function parseCareerLineMeta(body: string): CareerLineMeta | null {
   const teamName = head.replace(/\([^)]+\)/g, " ").replace(/\s+/g, " ").trim();
   if (!teamName) return null;
 
+  let leagueText = inferCareerLeagueFromParens(parenGroups, teamName);
+  if (leagueText === "Unknown" && parenGroups.length === 0) {
+    leagueText = inferCareerLeagueFromTeamName(teamName);
+  }
+
   return {
     teamName,
-    leagueText: inferCareerLeagueFromParens(parenGroups, teamName),
+    leagueText,
     statsText,
   };
+}
+
+function parseCareerStatFromTotals(
+  statsText: string,
+  perGamePattern: RegExp,
+  totalPattern: RegExp,
+): number | null {
+  const perGame = parseCareerStatNumber(statsText, perGamePattern);
+  if (perGame != null) return perGame;
+
+  const total = parseCareerStatNumber(statsText, totalPattern);
+  if (total == null) return null;
+
+  const gamesPlayed = parseCareerGamesPlayed(statsText);
+  if (gamesPlayed <= 0) return total;
+  return total / gamesPlayed;
 }
 
 function buildCareerSeasonRow(
@@ -627,9 +654,21 @@ function buildCareerSeasonRow(
   meta: CareerLineMeta,
 ): Omit<CareerSeasonRow, "leagueText"> {
   const { teamName, statsText } = meta;
-  const pointsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i);
-  const reboundsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i);
-  const assistsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i);
+  const pointsPerGame = parseCareerStatFromTotals(
+    statsText,
+    /([\d.]+)\s*ppg/i,
+    /([\d.]+)\s*pts\b/i,
+  );
+  const reboundsPerGame = parseCareerStatFromTotals(
+    statsText,
+    /([\d.]+)\s*rpg/i,
+    /([\d.]+)\s*reb\b/i,
+  );
+  const assistsPerGame = parseCareerStatFromTotals(
+    statsText,
+    /([\d.]+)\s*apg/i,
+    /([\d.]+)\s*ast\b/i,
+  );
 
   return {
     seasonLabel,
@@ -651,7 +690,10 @@ function careerLineHasAnyStat(statsText: string): boolean {
   return (
     parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i) != null ||
     parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i) != null ||
-    parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i) != null
+    parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i) != null ||
+    parseCareerStatNumber(statsText, /([\d.]+)\s*pts\b/i) != null ||
+    parseCareerStatNumber(statsText, /([\d.]+)\s*reb\b/i) != null ||
+    parseCareerStatNumber(statsText, /([\d.]+)\s*ast\b/i) != null
   );
 }
 

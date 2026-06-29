@@ -41,6 +41,13 @@ describe("career league routing", () => {
     assert.equal(routeLeagueTag("New Zealand NBL").leagueSlug, "new-zealand-nbl");
   });
 
+  it("routes French LNB Pro A tag variants to a canonical league", () => {
+    assert.equal(routeLeagueTag("ProA, starting five").leagueSlug, "lnb-pro-a");
+    assert.equal(routeLeagueTag("Jeep ELITE ProA").leagueSlug, "lnb-pro-a");
+    assert.equal(routeLeagueTag("Betclic ELITE ProA").leagueSlug, "lnb-pro-a");
+    assert.equal(routeLeagueTag("LNB U21").leagueSlug, "lnb-u21");
+  });
+
   it("normalizes team slugs consistently for the same school", () => {
     const a = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
     const b = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
@@ -107,5 +114,26 @@ describe("career profile parsing", () => {
     assert.equal(seasons[0]?.teamName, "Atlanta XPress");
     assert.equal(seasons[0]?.pointsPerGame, 21);
     assert.equal(seasons[0]?.reboundsPerGame, 6.1);
+  });
+
+  it("parses salary-prefixed NBA career lines without treating salary as team name", () => {
+    const html =
+      "Year-By-Year Career <b>2013-2014:</b> $1,078, 800: Utah Jazz (NBA): 44 games: 2.4ppg profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.teamName, "Utah Jazz");
+    assert.equal(seasons[0]?.leagueText, "NBA");
+  });
+
+  it("parses French U21 totals-format career lines", () => {
+    const html =
+      "Year-By-Year Career <b>2010-2011:</b> Cholet Basket U21 team: 1 game: 6pts, 5reb profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.teamName, "Cholet Basket U21 team");
+    assert.equal(seasons[0]?.leagueText, "LNB U21");
+    assert.equal(seasons[0]?.gamesPlayed, 1);
+    assert.equal(seasons[0]?.pointsPerGame, 6);
+    assert.equal(seasons[0]?.reboundsPerGame, 5);
   });
 });

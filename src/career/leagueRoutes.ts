@@ -56,6 +56,24 @@ function isAustralianNblTag(leagueText: string): boolean {
   ]);
 }
 
+function isLnbProATag(leagueText: string): boolean {
+  if (/\bU21\b/i.test(leagueText)) return false;
+
+  const primary = normalizeTag((leagueText.split(",")[0] ?? leagueText).trim());
+  if (primary === "proa") return true;
+
+  return tagIncludes(leagueText, [
+    "JEEP ELITE",
+    "BETCLIC ELITE",
+    "ELITE PROA",
+    "FRENCH LEAGUE",
+  ]);
+}
+
+function isLnbU21Tag(leagueText: string): boolean {
+  return tagIncludes(leagueText, ["LNB U21", "LNB YOUTH"]) || /\bU21\b/i.test(leagueText);
+}
+
 /** Map usbasket Year-By-Year league tags to Hoop Central leagues. */
 export function routeLeagueTag(
   leagueText: string,
@@ -247,6 +265,24 @@ export function routeLeagueTag(
       source: "usbasket-profile",
       leagueSlug: "b-league",
       leagueName: "B.League (Japan)",
+      skip: false,
+    };
+  }
+
+  if (isLnbU21Tag(leagueText)) {
+    return {
+      source: "usbasket-profile",
+      leagueSlug: "lnb-u21",
+      leagueName: "LNB Pro A U21",
+      skip: false,
+    };
+  }
+
+  if (isLnbProATag(leagueText)) {
+    return {
+      source: "usbasket-profile",
+      leagueSlug: "lnb-pro-a",
+      leagueName: "LNB Pro A",
       skip: false,
     };
   }
