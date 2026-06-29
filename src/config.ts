@@ -46,6 +46,20 @@ export function loadConfig(): AppConfig {
     ),
   );
 
+  return buildAppConfig(hoopCentralApiUrl);
+}
+
+/** Discovery-only runs — Hoop Central URL not required. */
+export function loadDiscoveryConfig(): AppConfig {
+  const hoopCentralApiUrl = normalizeBaseUrl(
+    process.env.HOOP_CENTRAL_API_URL?.trim() ||
+      process.env.HOOPCENTRAL_API_URL?.trim() ||
+      "http://localhost:3001",
+  );
+  return buildAppConfig(hoopCentralApiUrl);
+}
+
+function buildAppConfig(hoopCentralApiUrl: string): AppConfig {
   const ingestApiKey = process.env.INGEST_API_KEY?.trim() || null;
   const usbasketEmail = process.env.USBASKET_EMAIL?.trim() || null;
   const usbasketPassword = process.env.USBASKET_PASSWORD?.trim() || null;

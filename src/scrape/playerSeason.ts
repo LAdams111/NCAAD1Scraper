@@ -5,7 +5,13 @@ import {
   NCAA_USBASKET_TAG,
   NCAA_USBASKET_TAGS,
 } from "../division.js";
-import type { NcaaSeasonRow, UsbasketIndexRow } from "../types.js";
+import type {
+  CareerSeasonRow,
+  NcaaSeasonRow,
+  PlayoffStatsRow,
+  SeasonStatsBundle,
+  UsbasketIndexRow,
+} from "../types.js";
 import {
   calcPct,
   formatDisplayName,
@@ -59,6 +65,7 @@ export function indexRowToSeasonRow(
     blocksPerGame: round1(parseNumber(row.BS) ?? 0),
     fieldGoalPct: calcPct(fgMade2, fgAtt2),
     threePointPct: calcPct(fgMade3, fgAtt3),
+    freeThrowPct: null,
   };
 }
 
@@ -77,6 +84,7 @@ export function createZeroStatSeasonRow(teamName: string, seasonLabel: string): 
     blocksPerGame: 0,
     fieldGoalPct: null,
     threePointPct: null,
+    freeThrowPct: null,
   };
 }
 
@@ -91,6 +99,15 @@ export function indexRowToPlaceholderSeasonRow(
 
 function seasonHasStats(season: NcaaSeasonRow): boolean {
   return season.gamesPlayed > 0 || season.pointsPerGame > 0;
+}
+
+/** Returns 0 when USBasket career text omits a game count (common for high school). */
+function parseCareerGamesPlayed(statsText: string): number {
+  const gamesMatch = /(\d+)\s+games?\b/i.exec(statsText);
+  if (!gamesMatch) return 0;
+  const parsed = Number.parseInt(gamesMatch[1], 10);
+  if (Number.isNaN(parsed) || parsed < 0) return 0;
+  return parsed;
 }
 
 export function seasonsHaveRealStats(seasons: NcaaSeasonRow[]): boolean {
@@ -229,6 +246,92 @@ function findAveragesRow($: ReturnType<typeof load>, summaryTable: ReturnType<Re
   return averagesHeader.nextAll("tr").first();
 }
 
+function parseAveragesCells(cells: string[]): Omit<
+  PlayoffStatsRow,
+  never
+> | null {
+  if (cells.length < 14) return null;
+
+  const gamesPlayed = parseNumber(cells[1]);
+  const pointsPerGame = parseNumber(cells[3]);
+  const fieldGoalPct = parsePctCell(cells[4]);
+  const threePointPct = parsePctCell(cells[5]);
+  const freeThrowPct = parsePctCell(cells[6]);
+  const reboundsPerGame = parseNumber(cells[9]);
+  const assistsPerGame = parseNumber(cells[10]);
+  const blocksPerGame = parseNumber(cells[12]);
+  const stealsPerGame = parseNumber(cells[13]);
+
+  if (!gamesPlayed || gamesPlayed <= 0) return null;
+  if (pointsPerGame == null || reboundsPerGame == null || assistsPerGame == null) return null;
+
+  return {
+    gamesPlayed,
+    pointsPerGame: round1(pointsPerGame),
+    reboundsPerGame: round1(reboundsPerGame),
+    assistsPerGame: round1(assistsPerGame),
+    stealsPerGame: round1(stealsPerGame ?? 0),
+    blocksPerGame: round1(blocksPerGame ?? 0),
+    fieldGoalPct,
+    threePointPct,
+    freeThrowPct,
+  };
+}
+
+function findPlayoffsAveragesRow(
+  $: ReturnType<typeof load>,
+  summaryTable: ReturnType<ReturnType<typeof load>>,
+) {
+  const rows = summaryTable.find("tr");
+  let afterPlayoffMarker = false;
+
+  for (const tr of rows.toArray()) {
+    const row = $(tr);
+    const text = row.text().replace(/\s+/g, " ").trim();
+
+    if (/playoffs?/i.test(text) && !row.hasClass("my_pStats1") && !row.hasClass("my_pStats2")) {
+      afterPlayoffMarker = true;
+      continue;
+    }
+
+    if (afterPlayoffMarker && (row.hasClass("my_pStats1") || row.hasClass("my_pStats2"))) {
+      return row;
+    }
+  }
+
+  return summaryTable
+    .find("tr.my_pStats1, tr.my_pStats2")
+    .filter((__, tr) => /playoffs?/i.test($(tr).find("td").first().text()))
+    .first();
+}
+
+export function parsePlayoffStatsFromStatsHtml(html: string): PlayoffStatsRow | null {
+  if (!html || html === "No Data") return null;
+
+  const $ = load(html);
+  const summaryTable = $("table.my_Title").first();
+  if (!summaryTable.length) return null;
+
+  const playoffsRow = findPlayoffsAveragesRow($, summaryTable);
+  if (!playoffsRow.length) return null;
+
+  const cells = playoffsRow
+    .find("td")
+    .map((_i, td) => $(td).text().trim())
+    .get();
+
+  return parseAveragesCells(cells);
+}
+
+export function parseSeasonStatsBundleFromStatsHtml(
+  html: string,
+  usbasketTag: string | readonly string[] = NCAA_USBASKET_MEMBER_TAGS,
+): SeasonStatsBundle {
+  const season = parseNcaaSeasonFromStatsHtml(html, usbasketTag);
+  const playoffs = parsePlayoffStatsFromStatsHtml(html);
+  return { season, playoffs };
+}
+
 /** Parse one usbasket stats block (profile page or PlayerStatsAjax HTML). */
 export function parseNcaaSeasonFromStatsHtml(
   html: string,
@@ -262,6 +365,7 @@ export function parseNcaaSeasonFromStatsHtml(
   const pointsPerGame = parseNumber(cells[3]);
   const fg2Pct = parsePctCell(cells[4]);
   const fg3Pct = parsePctCell(cells[5]);
+  const ftPct = parsePctCell(cells[6]);
   const reboundsPerGame = parseNumber(cells[9]);
   const assistsPerGame = parseNumber(cells[10]);
   const blocksPerGame = parseNumber(cells[12]);
@@ -282,6 +386,7 @@ export function parseNcaaSeasonFromStatsHtml(
     blocksPerGame: round1(blocksPerGame ?? 0),
     fieldGoalPct: fg2Pct,
     threePointPct: fg3Pct,
+    freeThrowPct: ftPct,
   };
 }
 
@@ -310,6 +415,62 @@ export function parseSeasonRowsFromPlayerHtml(
 
   return dedupeSeasonRows(rows);
 }
+
+/** Parse embedded profile stat blocks including optional playoff averages. */
+export function parseSeasonStatsBundlesFromPlayerHtml(
+  html: string,
+  usbasketTag: string | readonly string[] = NCAA_USBASKET_TAGS,
+): SeasonStatsBundle[] {
+  const usbasketTags = typeof usbasketTag === "string" ? [usbasketTag] : usbasketTag;
+  const $ = load(html);
+  const bundles: SeasonStatsBundle[] = [];
+
+  $("h4.plstats-head, h4").each((_, heading) => {
+    const headingText = $(heading).text();
+    if (!headingMatchesLeagueTag(headingText, usbasketTags)) return;
+
+    const container = $(heading).nextAll(".dvgamesstats").first();
+    const fragment =
+      container.length > 0
+        ? `${$.html(heading)}${$.html(container)}`
+        : `${$.html(heading)}${$.html($(heading).nextAll("table.my_Title").first())}`;
+
+    bundles.push(parseSeasonStatsBundleFromStatsHtml(fragment, usbasketTags));
+  });
+
+  return bundles;
+}
+
+/** Collect playoff averages keyed by season label from all profile stat blocks. */
+export function parsePlayoffsBySeasonLabelFromPlayerHtml(
+  html: string,
+): Map<string, PlayoffStatsRow> {
+  const $ = load(html);
+  const map = new Map<string, PlayoffStatsRow>();
+
+  $("h4.plstats-head, h4").each((_, heading) => {
+    const headingText = $(heading).text();
+    const seasonMatch = /season\s*:\s*(\d{4}\s*-\s*\d{4})/i.exec(headingText);
+    if (!seasonMatch) return;
+
+    const seasonLabel = normalizeSeasonLabel(seasonMatch[1].replace(/\s+/g, ""));
+    if (!seasonLabel) return;
+
+    const container = $(heading).nextAll(".dvgamesstats").first();
+    const fragment =
+      container.length > 0
+        ? `${$.html(heading)}${$.html(container)}`
+        : `${$.html(heading)}${$.html($(heading).nextAll("table.my_Title").first())}`;
+
+    const playoffs = parsePlayoffStatsFromStatsHtml(fragment);
+    if (playoffs) {
+      map.set(seasonLabel, playoffs);
+    }
+  });
+
+  return map;
+}
+
 export function listProfileStatsSeasonParams(html: string, playerId: string): string[] {
   const pattern = new RegExp(
     `loadStatsData\\('${playerId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}','([^']+)'\\)`,
@@ -467,12 +628,7 @@ export function parseCareerYearByYearSeasons(
       continue;
     }
 
-    const gamesMatch = /(\d+)\s+games?\b/i.exec(statsText);
-    const gamesPlayed = gamesMatch ? Number.parseInt(gamesMatch[1], 10) : 1;
-    if (!gamesPlayed || gamesPlayed <= 0) {
-      rows.push(createZeroStatSeasonRow(teamName, seasonLabel));
-      continue;
-    }
+    const gamesPlayed = parseCareerGamesPlayed(statsText);
 
     rows.push({
       seasonLabel,
@@ -486,10 +642,105 @@ export function parseCareerYearByYearSeasons(
       blocksPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*bpg/i) ?? 0),
       fieldGoalPct: parseCareerPct(statsText, [/FGP:?\s*([\d.]+)%/i, /FG:\s*([\d.]+)%/i]),
       threePointPct: parseCareerPct(statsText, [/3FGP:?\s*([\d.]+)%/i, /3PT:?\s*([\d.]+)%/i, /3Pt:?\s*([\d.]+)%/i]),
+      freeThrowPct: parseCareerPct(statsText, [/FTP:?\s*([\d.]+)%/i, /FT:?\s*([\d.]+)%/i]),
     });
   }
 
   return dedupeSeasonRows(rows);
+}
+
+/** Parse every Year-By-Year career line (no league filter) for career-hub routing. */
+export function parseAllCareerYearByYearSeasons(html: string): CareerSeasonRow[] {
+  const marker = "Year-By-Year Career";
+  const start = html.indexOf(marker);
+  if (start < 0) return [];
+
+  const endCandidates = ["profile-head", "Awards/Achievements", "Awards & Achievements"];
+  let end = start + 20_000;
+  for (const candidate of endCandidates) {
+    const idx = html.indexOf(candidate, start + marker.length);
+    if (idx >= 0) end = Math.min(end, idx);
+  }
+
+  const section = html.slice(start, end);
+  const rows: CareerSeasonRow[] = [];
+
+  for (const match of section.matchAll(/<b>(\d{4}(?:-\d{4})?):<\/b>([\s\S]*?)(?=<b>\d{4}|$)/gi)) {
+    const seasonLabel = careerSeasonLabel(match[1]);
+    if (!seasonLabel) continue;
+
+    const body = stripHtmlText(truncateCareerLineHtml(match[2]));
+    const metaMatch = /^(.+?)\(([^)]+)\)/i.exec(body);
+    if (!metaMatch) continue;
+
+    const teamName = metaMatch[1].replace(/&quote;/g, "'").trim();
+    const leagueText = metaMatch[2].trim();
+    const statsText = body.slice(metaMatch[0].length).replace(/^:\s*/, "").trim();
+    if (!teamName || !leagueText) continue;
+
+    const pointsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i);
+    const reboundsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i);
+    const assistsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i);
+
+    if (
+      pointsPerGame == null ||
+      reboundsPerGame == null ||
+      assistsPerGame == null
+    ) {
+      rows.push({ ...createZeroStatSeasonRow(teamName, seasonLabel), leagueText });
+      continue;
+    }
+
+    const gamesPlayed = parseCareerGamesPlayed(statsText);
+
+    rows.push({
+      seasonLabel,
+      teamName,
+      teamAbbreviation: teamAbbreviation(teamName),
+      gamesPlayed,
+      pointsPerGame: round1(pointsPerGame),
+      reboundsPerGame: round1(reboundsPerGame),
+      assistsPerGame: round1(assistsPerGame),
+      stealsPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*spg/i) ?? 0),
+      blocksPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*bpg/i) ?? 0),
+      fieldGoalPct: parseCareerPct(statsText, [/FGP:?\s*([\d.]+)%/i, /FG:\s*([\d.]+)%/i]),
+      threePointPct: parseCareerPct(statsText, [/3FGP:?\s*([\d.]+)%/i, /3PT:?\s*([\d.]+)%/i, /3Pt:?\s*([\d.]+)%/i]),
+      freeThrowPct: parseCareerPct(statsText, [/FTP:?\s*([\d.]+)%/i, /FT:?\s*([\d.]+)%/i]),
+      leagueText,
+    });
+  }
+
+  return dedupeCareerSeasonRows(rows);
+}
+
+function shouldReplaceCareerSeason(
+  existing: CareerSeasonRow,
+  candidate: CareerSeasonRow,
+): boolean {
+  const existingGp = existing.gamesPlayed;
+  const candidateGp = candidate.gamesPlayed;
+  const existingKnown = existingGp != null && existingGp > 0;
+  const candidateKnown = candidateGp != null && candidateGp > 0;
+
+  if (candidateKnown && !existingKnown) return true;
+  if (candidateKnown && existingKnown && candidateGp! > existingGp!) return true;
+  return false;
+}
+
+function dedupeCareerSeasonRows(rows: CareerSeasonRow[]): CareerSeasonRow[] {
+  const byKey = new Map<string, CareerSeasonRow>();
+  for (const season of rows) {
+    const key = `${season.seasonLabel}:${season.teamName}:${season.leagueText}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, season);
+      continue;
+    }
+    if (shouldReplaceCareerSeason(existing, season)) {
+      byKey.set(key, season);
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.seasonLabel.localeCompare(b.seasonLabel));
 }
 
 function profileSeasonLabelFromHtml(html: string): string | null {
@@ -586,6 +837,7 @@ export function buildRecordsFromSeasonRows(
   playerId: string,
   displayName: string,
   seasons: NcaaSeasonRow[],
+  playoffsBySeasonLabel?: Map<string, PlayoffStatsRow | null>,
 ): NcaaPlayerSeasonRecord[] {
   return seasons.map((season) =>
     buildPlayerSeasonRecord({
@@ -603,7 +855,9 @@ export function buildRecordsFromSeasonRows(
         blocksPerGame: season.blocksPerGame,
         fieldGoalPct: season.fieldGoalPct,
         threePointPct: season.threePointPct,
+        freeThrowPct: season.freeThrowPct,
       },
+      playoffs: playoffsBySeasonLabel?.get(season.seasonLabel) ?? null,
     }),
   );
 }

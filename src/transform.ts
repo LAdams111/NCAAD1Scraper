@@ -24,9 +24,10 @@ export function toIngestPayload(
   if (includeFgPct) {
     if (record.stats.fieldGoalPct != null) stats.fieldGoalPct = record.stats.fieldGoalPct;
     if (record.stats.threePointPct != null) stats.threePointPct = record.stats.threePointPct;
+    if (record.stats.freeThrowPct != null) stats.freeThrowPct = record.stats.freeThrowPct;
   }
 
-  return {
+  const payload: HoopCentralIngestPayload = {
     source: record.source,
     externalId: record.externalId,
     player: playerOverride ?? { displayName: record.displayName },
@@ -44,6 +45,22 @@ export function toIngestPayload(
     },
     stats,
   };
+
+  if (record.playoffs) {
+    payload.playoffs = {
+      gamesPlayed: record.playoffs.gamesPlayed,
+      pointsPerGame: record.playoffs.pointsPerGame,
+      reboundsPerGame: record.playoffs.reboundsPerGame,
+      assistsPerGame: record.playoffs.assistsPerGame,
+      stealsPerGame: record.playoffs.stealsPerGame,
+      blocksPerGame: record.playoffs.blocksPerGame,
+      fieldGoalPct: record.playoffs.fieldGoalPct,
+      threePointPct: record.playoffs.threePointPct,
+      freeThrowPct: record.playoffs.freeThrowPct,
+    };
+  }
+
+  return payload;
 }
 
 export function buildPlayerSeasonRecord(input: {
@@ -53,6 +70,7 @@ export function buildPlayerSeasonRecord(input: {
   teamAbbreviation?: string;
   seasonLabel: string;
   stats: NcaaPlayerSeasonRecord["stats"];
+  playoffs?: NcaaPlayerSeasonRecord["playoffs"];
 }): NcaaPlayerSeasonRecord {
   const rawTeamName = input.teamName.replace(/&quote;/g, "'");
   const team = normalizeUsportsTeam(rawTeamName);
@@ -68,5 +86,6 @@ export function buildPlayerSeasonRecord(input: {
     teamAbbreviation: abbrev,
     seasonLabel: input.seasonLabel,
     stats: input.stats,
+    playoffs: input.playoffs ?? null,
   };
 }

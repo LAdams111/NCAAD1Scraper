@@ -99,23 +99,28 @@ export function parseStrDataFromHtml(html: string): UsbasketIndexRow[] | null {
   }
 }
 
+const PLAYER_LINK_PATTERN =
+  /href="https?:\/\/basketball\.(?:usbasket|eurobasket)\.com\/player\/([^"'?\s]+)\/(\d+)"[^>]*>([^<]*)</gi;
+
 /** Player profile / index links → usbasket numeric IDs (men's links only). */
 export function parsePlayerIdsFromIndexHtml(html: string): string[] {
   return parsePlayersFromIndexHtml(html).map((entry) => entry.playerId);
 }
 
-/** Player IDs and raw link labels from usbasket index HTML (men's links only). */
+function isWomenPlayerLink(html: string, start: number, matchLength: number): boolean {
+  const tail = html.slice(start, start + matchLength + 12);
+  return /Women=1/i.test(tail);
+}
+
+/** Player IDs and raw link labels from usbasket/eurobasket index HTML (men's links only). */
 export function parsePlayersFromIndexHtml(
   html: string,
 ): Array<{ playerId: string; playerName: string }> {
   const byId = new Map<string, string>();
 
-  for (const match of html.matchAll(
-    /href="https?:\/\/basketball\.usbasket\.com\/player\/([^"'?\s]+)\/(\d+)"[^>]*>([^<]*)</gi,
-  )) {
+  for (const match of html.matchAll(PLAYER_LINK_PATTERN)) {
     const start = match.index ?? 0;
-    const tail = html.slice(start, start + match[0].length + 12);
-    if (/Women=1/i.test(tail)) continue;
+    if (isWomenPlayerLink(html, start, match[0].length)) continue;
 
     const playerId = match[2];
     const linkText = match[3].trim();
@@ -127,8 +132,7 @@ export function parsePlayersFromIndexHtml(
 
   for (const match of html.matchAll(/\/player\/[^"'?\s]+\/(\d+)/gi)) {
     const start = match.index ?? 0;
-    const tail = html.slice(start, start + match[0].length + 12);
-    if (/Women=1/i.test(tail)) continue;
+    if (isWomenPlayerLink(html, start, match[0].length)) continue;
     if (!byId.has(match[1])) {
       byId.set(match[1], "");
     }
@@ -370,10 +374,36 @@ export class UsbasketClient {
     return `${INDEX_BASE}?Year=${encodeURIComponent(yearParam)}`;
   }
 
+  segmentIndexUrl(
+    segment: string,
+    yearParam: string,
+    options?: { women?: boolean; host?: "usbasket" | "eurobasket" },
+  ): string {
+    const host = options?.host ?? "usbasket";
+    const base =
+      host === "eurobasket"
+        ? `https://www.eurobasket.com/${encodeURIComponent(segment)}/basketball-Players.aspx`
+        : `https://www.usbasket.com/${encodeURIComponent(segment)}/basketball-Players.aspx`;
+    const params = new URLSearchParams({ Year: yearParam });
+    if (options?.women) params.set("women", "1");
+    return `${base}?${params.toString()}`;
+  }
+
   async fetchSeasonIndex(
     yearParam: string,
   ): Promise<{ html: string; rows: UsbasketIndexRow[] | null }> {
     const html = await this.fetchHtml(this.indexUrl(yearParam), 8, true);
+    const rows = parseStrDataFromHtml(html);
+    return { html, rows };
+  }
+
+  async fetchSegmentSeasonIndex(
+    segment: string,
+    yearParam: string,
+    options?: { women?: boolean; host?: "usbasket" | "eurobasket" },
+  ): Promise<{ html: string; rows: UsbasketIndexRow[] | null }> {
+    const url = this.segmentIndexUrl(segment, yearParam, options);
+    const html = await this.fetchHtml(url, 8, true);
     const rows = parseStrDataFromHtml(html);
     return { html, rows };
   }

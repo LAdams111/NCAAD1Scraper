@@ -133,7 +133,9 @@ async function findUsbasketIdentityByPlayerId(
 export function createLinkResolver(options: {
   linkCachePath: string;
   loadCompletionStatus: (source: string) => Promise<HcPlayerStatus[]>;
+  source?: string;
 }): LinkResolver {
+  const ingestSource = options.source ?? NCAA_SOURCE;
   const linkCache = loadLinkCache(options.linkCachePath);
   const lookups = new Map<string, Map<string, HcPlayerStatus[]>>();
 
@@ -172,7 +174,7 @@ export function createLinkResolver(options: {
       const usbasketHit = await findUsbasketIdentityByPlayerId(
         playerId,
         options.loadCompletionStatus,
-        siblingUsbasketSources(NCAA_SOURCE),
+        siblingUsbasketSources(ingestSource),
       );
       if (usbasketHit) return usbasketHit;
 
@@ -198,9 +200,10 @@ export function createLinkResolver(options: {
 export function buildBioPayload(
   bio: Pick<NcaaPlayerBio, "playerId" | "displayName">,
   linkTo?: LinkTarget,
+  source: string = NCAA_SOURCE,
 ) {
   return {
-    source: NCAA_SOURCE,
+    source,
     externalId: bio.playerId,
     player: {
       displayName: bio.displayName,

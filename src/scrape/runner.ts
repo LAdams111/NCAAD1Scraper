@@ -39,6 +39,7 @@ import {
   buildRecordsFromSeasonRows,
   collectAllNcaaSeasons,
   mergeSeasonRows,
+  parsePlayoffsBySeasonLabelFromPlayerHtml,
   seasonsHaveRealStats,
 } from "./playerSeason.js";
 import { loadSlugCache, saveSlugCache } from "./slugCache.js";
@@ -48,6 +49,14 @@ import {
   playerBelongsToShard,
   shardLabel,
 } from "../utils/shard.js";
+
+function collectPlayoffsBySeasonLabel(
+  html: string | undefined,
+): Map<string, import("../types.js").PlayoffStatsRow> | undefined {
+  if (!html) return undefined;
+  const map = parsePlayoffsBySeasonLabelFromPlayerHtml(html);
+  return map.size ? map : undefined;
+}
 
 function formatSeasonLabels(seasons: NcaaSeasonRow[]): string {
   return seasons.map((season) => season.seasonLabel).join(", ");
@@ -197,6 +206,7 @@ async function processPlayer(
 
   let bio: NcaaPlayerBio;
   let mergedSeasons = mergeSeasonRows(indexSeasons);
+  let profileHtml: string | undefined;
 
   const useIndexOnly =
     options.backfill && cacheEntry && seasonsHaveRealStats(indexSeasons);
@@ -209,6 +219,7 @@ async function processPlayer(
     );
   } else {
     const html = await fetchPlayerHtml(client, options, playerId, displayName);
+    profileHtml = html;
 
     bio = parsePlayerBioFromHtml(
       html,
@@ -325,6 +336,7 @@ async function processPlayer(
     playerId,
     resolvedName,
     mergedSeasons,
+    collectPlayoffsBySeasonLabel(profileHtml),
   );
 
   const seasonResult = await ingestSeasonRecords(

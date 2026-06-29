@@ -154,6 +154,11 @@ scrape-ncaa-backfill.log
 scrape-ncaa-d2-backfill*.log
 scrape-usports-backfill*.log
 scrape-ccaa-backfill*.log
+usbasket-global-*.cache.json
+usbasket-global-discovery*.checkpoint.json
+scrape-career-backfill*.checkpoint.json
+scrape-career-backfill*.log
+career-to-hc*.cache.json
 audit-ccaa-missing-career*.log
 repair-ccaa-missing-career.log
 tmp-*.html

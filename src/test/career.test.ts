@@ -1,0 +1,73 @@
+import { readFileSync } from "node:fs";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { parseAllCareerYearByYearSeasons } from "../scrape/playerSeason.js";
+import { routeLeagueTag, normalizeCareerTeam } from "../career/leagueRoutes.js";
+import { buildCareerSeasonRecords } from "../career/transform.js";
+
+describe("career league routing", () => {
+  it("routes NCAA and high school tags", () => {
+    assert.equal(routeLeagueTag("NCAA").leagueSlug, "ncaa");
+    assert.equal(routeLeagueTag("NCAA2").leagueSlug, "ncaa-d2");
+    assert.equal(routeLeagueTag("CCAA").leagueSlug, "ccaa");
+    assert.equal(routeLeagueTag("CIS").leagueSlug, "u-sports");
+    assert.equal(routeLeagueTag("High School").leagueSlug, "high-school");
+  });
+
+  it("skips authoritative NBA and G League by default", () => {
+    assert.equal(routeLeagueTag("NBA").skip, true);
+    assert.equal(routeLeagueTag("G-League").skip, true);
+    assert.equal(routeLeagueTag("NBA", { skipAuthoritativeSources: false }).skip, false);
+  });
+
+  it("creates dynamic league slugs for unknown tags", () => {
+    const route = routeLeagueTag("Germany-ProA");
+    assert.equal(route.skip, false);
+    assert.equal(route.leagueSlug, "germany-proa");
+  });
+
+  it("normalizes team slugs consistently for the same school", () => {
+    const a = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
+    const b = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
+    assert.equal(a.slug, b.slug);
+  });
+});
+
+describe("career profile parsing", () => {
+  it("parses all career lines from Brandon Ellis fixture", () => {
+    const html = readFileSync("src/test/fixtures/player-career-brandon-ellis.html", "utf8");
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.ok(seasons.length >= 8);
+    assert.ok(seasons.some((s) => s.leagueText.includes("CCAA")));
+    assert.ok(seasons.some((s) => s.leagueText.includes("CIS")));
+    assert.ok(seasons.some((s) => s.leagueText.includes("Germany-ProA")));
+  });
+
+  it("builds routed ingest records and skips NBA when configured", () => {
+    const html = readFileSync("src/test/fixtures/player-career-brandon-ellis.html", "utf8");
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    const { records, skipped } = buildCareerSeasonRecords("17016", "Brandon Ellis", seasons);
+    assert.ok(records.length >= 6);
+    assert.ok(records.every((r) => r.source === "usbasket-profile"));
+    assert.ok(records.some((r) => r.leagueSlug === "ccaa"));
+    assert.ok(records.some((r) => r.leagueSlug === "u-sports"));
+    assert.equal(skipped, 0);
+  });
+
+  it("uses zero gamesPlayed when career line omits game count", () => {
+    const html =
+      'Year-By-Year Career <b>1999-2000:</b> St. Vincent-St. Mary HS of Akron(Ohio): 18.1 ppg, 6.1 rpg, 3.8 apg profile-head';
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    const hs = seasons.find((s) => s.seasonLabel === "1999-00");
+    assert.ok(hs);
+    assert.equal(hs.gamesPlayed, 0);
+    assert.equal(hs.pointsPerGame, 18.1);
+  });
+
+  it("parses explicit game counts from career lines", () => {
+    const html =
+      "Year-By-Year Career <b>2023-2024:</b> Lakers(NBA): 71 games, 25.7 ppg, 7.8 rpg, 8.3 apg profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons[0]?.gamesPlayed, 71);
+  });
+});

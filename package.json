@@ -30,7 +30,20 @@
     "repair:ccaa-missing-career": "node scripts/repair-ccaa-missing-career.mjs",
     "patch:ccaa-names": "node scripts/patch-ccaa-cache-names.mjs",
     "generate:ccaa-team-aliases": "node scripts/generate-ccaa-team-aliases.mjs",
-    "scrape:discover": "node dist/index.js --discover-only --shard 0/4"
+    "scrape:discover": "node dist/index.js --discover-only --shard 0/4",
+    "discover:global": "node dist/discover/index.js",
+    "discover:global:shard0": "node dist/discover/index.js --shard 0/4 --resume",
+    "discover:global:shard1": "node dist/discover/index.js --shard 1/4 --resume",
+    "discover:global:shard2": "node dist/discover/index.js --shard 2/4 --resume",
+    "discover:global:shard3": "node dist/discover/index.js --shard 3/4 --resume",
+    "discover:global:merge": "node scripts/merge-global-discovery.mjs",
+    "career:backfill": "node dist/career/index.js --backfill",
+    "career:dry-run": "node dist/career/index.js --dry-run --backfill",
+    "career:enrich": "node dist/career/index.js --backfill --enrich-existing",
+    "career:backfill:shard0": "node dist/career/index.js --backfill --shard 0/4 --resume",
+    "career:backfill:shard1": "node dist/career/index.js --backfill --shard 1/4 --resume",
+    "career:backfill:shard2": "node dist/career/index.js --backfill --shard 2/4 --resume",
+    "career:backfill:shard3": "node dist/career/index.js --backfill --shard 3/4 --resume"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

@@ -37,6 +37,30 @@ export interface NcaaSeasonRow {
   blocksPerGame: number;
   fieldGoalPct: number | null;
   threePointPct: number | null;
+  freeThrowPct: number | null;
+}
+
+/** Playoff averages for one player-team-season (stored separately in Hoop Central). */
+export interface PlayoffStatsRow {
+  gamesPlayed: number;
+  pointsPerGame: number;
+  reboundsPerGame: number;
+  assistsPerGame: number;
+  stealsPerGame: number;
+  blocksPerGame: number;
+  fieldGoalPct: number | null;
+  threePointPct: number | null;
+  freeThrowPct: number | null;
+}
+
+export interface SeasonStatsBundle {
+  season: NcaaSeasonRow | null;
+  playoffs: PlayoffStatsRow | null;
+}
+
+/** Parsed career line including raw usbasket league tag for routing. */
+export interface CareerSeasonRow extends NcaaSeasonRow {
+  leagueText: string;
 }
 
 export interface NcaaPlayerBio {
@@ -50,7 +74,7 @@ export interface NcaaPlayerBio {
 }
 
 export interface HoopCentralBioPayload {
-  source: typeof NCAA_SOURCE;
+  source: string;
   externalId: string;
   player: {
     displayName: string;
@@ -116,11 +140,13 @@ export interface NcaaPlayerSeasonRecord {
     blocksPerGame: number;
     fieldGoalPct?: number | null;
     threePointPct?: number | null;
+    freeThrowPct?: number | null;
   };
+  playoffs?: PlayoffStatsRow | null;
 }
 
 export interface HoopCentralIngestPayload {
-  source: typeof NCAA_SOURCE;
+  source: string;
   externalId: string;
   player: {
     displayName: string;
@@ -132,8 +158,8 @@ export interface HoopCentralIngestPayload {
     headshotUrl?: string | null;
   };
   league: {
-    slug: typeof NCAA_LEAGUE_SLUG;
-    name: typeof NCAA_LEAGUE_NAME;
+    slug: string;
+    name: string;
   };
   team: {
     slug: string;
@@ -152,7 +178,9 @@ export interface HoopCentralIngestPayload {
     blocksPerGame?: number | null;
     fieldGoalPct?: number | null;
     threePointPct?: number | null;
+    freeThrowPct?: number | null;
   };
+  playoffs?: PlayoffStatsRow | null;
 }
 
 export interface HoopCentralIngestResponse {
@@ -165,6 +193,7 @@ export interface HoopCentralIngestResponse {
     season: boolean;
     stint: boolean;
     stats: boolean;
+    playoffs?: boolean;
   };
 }
 
@@ -196,6 +225,50 @@ export interface ScrapeSummary {
   skipped: number;
   linked: number;
   seasonRows: number;
+}
+
+/** Hoop Central ingest source for usbasket profile career backfill. */
+export const CAREER_SOURCE = "usbasket-profile" as const;
+
+export interface CareerPlayerSeasonRecord {
+  source: typeof CAREER_SOURCE;
+  externalId: string;
+  displayName: string;
+  leagueSlug: string;
+  leagueName: string;
+  leagueText: string;
+  teamSlug: string;
+  teamName: string;
+  teamAbbreviation: string;
+  seasonLabel: string;
+  stats: NcaaPlayerSeasonRecord["stats"];
+  playoffs?: PlayoffStatsRow | null;
+}
+
+export interface CareerBackfillOptions {
+  backfill: boolean;
+  dryRun: boolean;
+  resume: boolean;
+  fresh: boolean;
+  useFixtures: boolean;
+  enrichExisting: boolean;
+  createNewPlayers: boolean;
+  skipAuthoritativeSources: boolean;
+  limit?: number;
+  playerSlug?: string;
+  requestDelayMs: number;
+  checkpointPath: string;
+  logPath: string;
+  slugCachePath: string;
+  playerCachePath: string;
+  linkCachePath: string;
+  shardIndex: number;
+  shardCount: number;
+}
+
+export interface CareerBackfillSummary extends ScrapeSummary {
+  routedSeasons: number;
+  skippedRoutes: number;
 }
 
 export interface CachedPlayerSeasons {

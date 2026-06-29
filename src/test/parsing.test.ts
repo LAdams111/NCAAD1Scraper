@@ -11,6 +11,8 @@ import {
   mergeSeasonRows,
   parseSeasonRowsFromIndexData,
   parseSeasonRowsFromPlayerHtml,
+  parsePlayoffStatsFromStatsHtml,
+  parsePlayoffsBySeasonLabelFromPlayerHtml,
   isExcludedCcaaLeagueLabel,
   statsBlockMatchesCcaaLeague,
 } from "../scrape/playerSeason.js";
@@ -84,6 +86,30 @@ describe("player page parsing", () => {
     assert.equal(season.teamName, "Duke");
     assert.equal(season.gamesPlayed, 36);
     assert.equal(season.pointsPerGame, 13.2);
+    assert.equal(season.threePointPct, 39.8);
+    assert.equal(season.freeThrowPct, 87.5);
+  });
+
+  it("parses playoff averages from a stats block", () => {
+    const fragment = readFileSync("src/test/fixtures/player-stats-playoffs.html", "utf8");
+    const playoffs = parsePlayoffStatsFromStatsHtml(fragment);
+    assert.ok(playoffs);
+    assert.equal(playoffs.gamesPlayed, 5);
+    assert.equal(playoffs.pointsPerGame, 25.7);
+    assert.equal(playoffs.reboundsPerGame, 7.6);
+    assert.equal(playoffs.assistsPerGame, 8.8);
+    assert.equal(playoffs.fieldGoalPct, 56);
+    assert.equal(playoffs.threePointPct, 37.5);
+    assert.equal(playoffs.freeThrowPct, 68.4);
+  });
+
+  it("indexes playoff stats by season label on profile pages", () => {
+    const fragment = readFileSync("src/test/fixtures/player-stats-playoffs.html", "utf8");
+    const playoffsBySeason = parsePlayoffsBySeasonLabelFromPlayerHtml(fragment);
+    assert.equal(playoffsBySeason.size, 1);
+    const playoffs = playoffsBySeason.get("2023-24");
+    assert.ok(playoffs);
+    assert.equal(playoffs.gamesPlayed, 5);
   });
 
   it("parses CCAA stats labeled (NAIA) with my_pStats1 averages", () => {
@@ -136,6 +162,7 @@ describe("player page parsing", () => {
           blocksPerGame: 0.3,
           fieldGoalPct: 100,
           threePointPct: 0,
+          freeThrowPct: null,
         },
       ],
     );
