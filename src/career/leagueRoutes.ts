@@ -46,6 +46,16 @@ function displayNameFromTag(leagueText: string): string {
     .replace(/\bNba\b/i, "NBA");
 }
 
+/** True only for USBasket tags that clearly mean Australia's NBL. */
+function isAustralianNblTag(leagueText: string): boolean {
+  return tagIncludes(leagueText, [
+    "AUSTRALIA-NBL",
+    "AUSTRALIA NBL",
+    "NBL AUSTRALIA",
+    "AUS-NBL",
+  ]);
+}
+
 /** Map usbasket Year-By-Year league tags to Hoop Central leagues. */
 export function routeLeagueTag(
   leagueText: string,
@@ -203,14 +213,7 @@ export function routeLeagueTag(
     };
   }
 
-  if (
-    tagIncludes(leagueText, [
-      "AUSTRALIA-NBL",
-      "AUSTRALIA NBL",
-      "NBL AUSTRALIA",
-      "AUS-NBL",
-    ])
-  ) {
+  if (isAustralianNblTag(leagueText)) {
     return {
       source: "usbasket-profile",
       leagueSlug: "nbl",
@@ -249,6 +252,17 @@ export function routeLeagueTag(
   }
 
   const slug = slugFromTag(leagueText);
+  if (slug === "nbl" && !isAustralianNblTag(leagueText)) {
+    const primary = leagueText.split(",")[0]?.trim() ?? leagueText;
+    const distinctSlug = nameToSlug(primary);
+    return {
+      source: "usbasket-profile",
+      leagueSlug: distinctSlug === "nbl" ? "nbl-other" : distinctSlug,
+      leagueName: displayNameFromTag(leagueText),
+      skip: false,
+    };
+  }
+
   return {
     source: "usbasket-profile",
     leagueSlug: slug || "unknown",

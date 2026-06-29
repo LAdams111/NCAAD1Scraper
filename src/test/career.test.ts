@@ -35,6 +35,12 @@ describe("career league routing", () => {
     assert.equal(routeLeagueTag("B-League").leagueSlug, "b-league");
   });
 
+  it("does not route ambiguous NBL tags to NBL Australia", () => {
+    assert.equal(routeLeagueTag("NBL").leagueSlug, "nbl-other");
+    assert.notEqual(routeLeagueTag("NBL").leagueSlug, "nbl");
+    assert.equal(routeLeagueTag("New Zealand NBL").leagueSlug, "new-zealand-nbl");
+  });
+
   it("normalizes team slugs consistently for the same school", () => {
     const a = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
     const b = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
