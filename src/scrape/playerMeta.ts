@@ -72,12 +72,49 @@ function extractBirthDateFromHtml(html: string): string | null {
   return extractBirthDateFromText(html);
 }
 
-function extractHometown(text: string): string | null {
+function normalizeHometown(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim();
+}
+
+/** Reject redacted profile text and career-table junk mistaken for a city. */
+export function isPlausibleHometown(value: string | null | undefined): boolean {
+  const hometown = value?.trim();
+  if (!hometown || hometown.length > 80) return false;
+  if (/\*{2,}/.test(hometown)) return false;
+  if (/full name|year-by-year|starting five|\bgames:/i.test(hometown)) return false;
+  if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(hometown)) return false;
+  return true;
+}
+
+function sanitizeHometown(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const hometown = normalizeHometown(value);
+  return isPlausibleHometown(hometown) ? hometown : null;
+}
+
+/** Birth city from the structured Born: … in City link (works when body text is redacted). */
+function extractHometownFromHtml(html: string): string | null {
+  const structured = /<span class="testdv">\s*in\s*<a[^>]*>\s*([^<]+?)\s*<\/a>/i.exec(html);
+  if (structured) {
+    const parsed = sanitizeHometown(structured[1]);
+    if (parsed) return parsed;
+  }
+
+  return null;
+}
+
+function extractHometownFromText(text: string): string | null {
   const bornIn = /born in\s+([^.<]+?)(?:\.|\s+He\s|\s+She\s|$)/i.exec(text);
-  if (bornIn) return bornIn[1].replace(/\s+/g, " ").trim();
+  if (bornIn) {
+    const parsed = sanitizeHometown(bornIn[1]);
+    if (parsed) return parsed;
+  }
 
   const faq = /Where was [^?]+\?<\/h3><p>[^<]+ was born in\s+([^.<]+)/i.exec(text);
-  if (faq) return faq[1].replace(/\s+/g, " ").trim();
+  if (faq) {
+    const parsed = sanitizeHometown(faq[1]);
+    if (parsed) return parsed;
+  }
 
   return null;
 }
@@ -166,6 +203,7 @@ export function parsePlayerBioFromHtml(
     position,
     heightCm: extractHeightCm(combined),
     weightKg: extractWeightKg(combined),
-    hometown: extractHometown(combined),
+    hometown:
+      extractHometownFromHtml(html) ?? extractHometownFromText(combined),
   };
 }

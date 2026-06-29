@@ -19,6 +19,7 @@ import {
 import {
   parsePlayerBioFromHtml,
   parseUsbasketBirthDate,
+  isPlausibleHometown,
 } from "../scrape/playerMeta.js";
 import { matchBdlExternalId, buildBdlLookup, isPlausibleCollegeAge, matchExternalId } from "../scrape/linking.js";
 import { normalizeSeasonLabel, calcPct } from "../utils/season.js";
@@ -214,6 +215,25 @@ describe("player bio parsing", () => {
     assert.equal(bio.hometown, "Detroit, MI");
     assert.equal(bio.heightCm, 188);
     assert.equal(bio.weightKg, 82);
+  });
+
+  it("reads hometown from Born block when body text is redacted", () => {
+    const html = `
+      <h1 class="player-title pltitlebigger">SERGIO LLULL basketball player profile</h1>
+      <div class="newseotxt">Born in ****** Full name: ***** Year-By-Year Career 2009-2010: ****</div>
+      <p><b>Born:</b> <a href="https://www.eurobasket.com/List-Players-by-birth.aspx?Playerid=66630">Nov.15, 1987</a>
+      <span class="testdv"> in <a href="https://www.eurobasket.com/birth-cities/Mahon_Spain"> Mahon (Spain)</a></span></p>`;
+    const bio = parsePlayerBioFromHtml(html, "66630", "Sergio Llull");
+    assert.equal(bio.hometown, "Mahon (Spain)");
+  });
+
+  it("returns null hometown when profile has no birth city", () => {
+    const html = `
+      <div class="newseotxt">Born in ****** Full name: ***** Year-By-Year Career 2009-2010: ****</div>
+      <p><b>Born:</b> <a href="https://www.eurobasket.com/List-Players-by-birth.aspx?Playerid=999">Nov.15, 1987</a></p>`;
+    const bio = parsePlayerBioFromHtml(html, "999", "Mystery Player");
+    assert.equal(bio.hometown, null);
+    assert.equal(isPlausibleHometown("****** Full name: junk"), false);
   });
 
   it("normalizes usbasket birth date strings", () => {

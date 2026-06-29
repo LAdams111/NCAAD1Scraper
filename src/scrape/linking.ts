@@ -223,11 +223,11 @@ export function buildCareerBioPayload(
     externalId: bio.playerId,
     player: {
       displayName: bio.displayName,
-      birthDate: bio.birthDate,
-      position: bio.position,
-      heightCm: bio.heightCm,
-      weightKg: bio.weightKg,
-      hometown: bio.hometown,
+      ...(bio.birthDate ? { birthDate: bio.birthDate } : {}),
+      ...(bio.position ? { position: bio.position } : {}),
+      ...(bio.heightCm != null ? { heightCm: bio.heightCm } : {}),
+      ...(bio.weightKg != null ? { weightKg: bio.weightKg } : {}),
+      ...(bio.hometown ? { hometown: bio.hometown } : {}),
     },
     ...(linkTo ? { linkTo } : {}),
   };
