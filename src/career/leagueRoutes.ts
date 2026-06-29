@@ -203,6 +203,51 @@ export function routeLeagueTag(
     };
   }
 
+  if (
+    tagIncludes(leagueText, [
+      "AUSTRALIA-NBL",
+      "AUSTRALIA NBL",
+      "NBL AUSTRALIA",
+      "AUS-NBL",
+    ])
+  ) {
+    return {
+      source: "usbasket-profile",
+      leagueSlug: "nbl",
+      leagueName: "NBL Australia",
+      skip: false,
+    };
+  }
+
+  if (
+    tagIncludes(leagueText, ["BAL", "BASKETBALL AFRICA LEAGUE", "BASKETBALL AFRICA"])
+  ) {
+    return {
+      source: "usbasket-profile",
+      leagueSlug: "bal",
+      leagueName: "Basketball Africa League",
+      skip: false,
+    };
+  }
+
+  if (tagIncludes(leagueText, ["CBA", "CHINESE BASKETBALL"])) {
+    return {
+      source: "usbasket-profile",
+      leagueSlug: "cba",
+      leagueName: "Chinese Basketball Association",
+      skip: false,
+    };
+  }
+
+  if (tagIncludes(leagueText, ["B-LEAGUE", "B.LEAGUE", "JAPAN B LEAGUE"])) {
+    return {
+      source: "usbasket-profile",
+      leagueSlug: "b-league",
+      leagueName: "B.League (Japan)",
+      skip: false,
+    };
+  }
+
   const slug = slugFromTag(leagueText);
   return {
     source: "usbasket-profile",

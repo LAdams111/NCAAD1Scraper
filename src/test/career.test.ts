@@ -26,6 +26,15 @@ describe("career league routing", () => {
     assert.equal(route.leagueSlug, "germany-proa");
   });
 
+  it("routes pre-seeded international leagues from usbasket tag variants", () => {
+    assert.equal(routeLeagueTag("Australia-NBL").leagueSlug, "nbl");
+    assert.equal(routeLeagueTag("Australia-NBL").leagueName, "NBL Australia");
+    assert.equal(routeLeagueTag("EuroLeague").leagueSlug, "euroleague");
+    assert.equal(routeLeagueTag("BAL").leagueSlug, "bal");
+    assert.equal(routeLeagueTag("CBA").leagueSlug, "cba");
+    assert.equal(routeLeagueTag("B-League").leagueSlug, "b-league");
+  });
+
   it("normalizes team slugs consistently for the same school", () => {
     const a = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
     const b = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
