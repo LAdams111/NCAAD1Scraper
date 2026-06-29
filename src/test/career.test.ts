@@ -136,4 +136,23 @@ describe("career profile parsing", () => {
     assert.equal(seasons[0]?.pointsPerGame, 6);
     assert.equal(seasons[0]?.reboundsPerGame, 5);
   });
+
+  it("skips draft and trade career lines without real team stints", () => {
+    const html =
+      "Year-By-Year Career <b>2018:</b> Drafted by Atlanta Hawks (NBA,1rd(3)) (traded to Dallas) profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 0);
+
+    const { records } = buildCareerSeasonRecords("333799", "Luka Doncic", seasons);
+    assert.equal(records.length, 0);
+  });
+
+  it("keeps real team seasons with stats even when line mentions signing", () => {
+    const html =
+      "Year-By-Year Career <b>2024-2025:</b> in Feb.'25 signed at Los Angeles Lakers (NBA): 33 games: 28.5ppg profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.gamesPlayed, 33);
+    assert.equal(seasons[0]?.pointsPerGame, 28.5);
+  });
 });

@@ -1,5 +1,6 @@
 import type { CareerPlayerSeasonRecord, CareerSeasonRow, HoopCentralIngestPayload, PlayoffStatsRow } from "../types.js";
 import { CAREER_SOURCE } from "../types.js";
+import { isCareerTransactionSeason } from "../scrape/playerSeason.js";
 import { normalizeCareerTeam, routeLeagueTag } from "./leagueRoutes.js";
 
 export function buildCareerSeasonRecords(
@@ -15,6 +16,11 @@ export function buildCareerSeasonRecords(
   let skipped = 0;
 
   for (const season of seasons) {
+    if (isCareerTransactionSeason(season)) {
+      skipped += 1;
+      continue;
+    }
+
     const route = routeLeagueTag(season.leagueText, options);
     if (route.skip) {
       skipped += 1;

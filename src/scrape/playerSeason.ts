@@ -697,6 +697,53 @@ function careerLineHasAnyStat(statsText: string): boolean {
   );
 }
 
+const CAREER_TRANSACTION_PATTERNS = [
+  /\bdrafted by\b/i,
+  /\bdeclared for\b/i,
+  /\btraded to\b/i,
+  /\btraded from\b/i,
+  /\bacquired from\b/i,
+  /\breleased\b/i,
+  /\bwaived\b/i,
+  /\bsigned with\b/i,
+  /\bsigned to\b/i,
+  /\bfree agent\b/i,
+  /\bentered the draft\b/i,
+  /\bnba draft\b/i,
+] as const;
+
+/** Skip draft/trade/news career lines that are not real team-season stints. */
+export function isCareerTransactionSeason(
+  season: Pick<
+    CareerSeasonRow,
+    "teamName" | "leagueText" | "gamesPlayed" | "pointsPerGame" | "reboundsPerGame" | "assistsPerGame"
+  >,
+): boolean {
+  const team = season.teamName.trim();
+  const league = season.leagueText.trim();
+  const combined = `${team} ${league}`;
+
+  if (/^\$[\d,\s]/.test(team)) return true;
+
+  const hasPlayedStats =
+    season.gamesPlayed > 0 ||
+    season.pointsPerGame > 0 ||
+    season.reboundsPerGame > 0 ||
+    season.assistsPerGame > 0;
+
+  if (/\bsigned at\b/i.test(combined) && hasPlayedStats) {
+    return false;
+  }
+
+  if (CAREER_TRANSACTION_PATTERNS.some((pattern) => pattern.test(combined))) {
+    return true;
+  }
+
+  if (/^traded to\b/i.test(league)) return true;
+
+  return false;
+}
+
 function parseCareerPct(text: string, patterns: RegExp[]): number | null {
   for (const pattern of patterns) {
     const match = pattern.exec(text);
@@ -794,11 +841,18 @@ export function parseAllCareerYearByYearSeasons(html: string): CareerSeasonRow[]
     if (!meta || !meta.teamName || !meta.leagueText) continue;
 
     if (!careerLineHasAnyStat(meta.statsText)) {
-      rows.push({ ...createZeroStatSeasonRow(meta.teamName, seasonLabel), leagueText: meta.leagueText });
+      const placeholder = {
+        ...createZeroStatSeasonRow(meta.teamName, seasonLabel),
+        leagueText: meta.leagueText,
+      };
+      if (isCareerTransactionSeason(placeholder)) continue;
+      rows.push(placeholder);
       continue;
     }
 
-    rows.push({ ...buildCareerSeasonRow(seasonLabel, meta), leagueText: meta.leagueText });
+    const row = { ...buildCareerSeasonRow(seasonLabel, meta), leagueText: meta.leagueText };
+    if (isCareerTransactionSeason(row)) continue;
+    rows.push(row);
   }
 
   return dedupeCareerSeasonRows(rows);
