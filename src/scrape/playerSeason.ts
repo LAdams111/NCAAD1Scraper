@@ -352,6 +352,23 @@ function stripHtmlText(value: string): string {
     .trim();
 }
 
+/** Stop at the next career line or Awards block — last Year-By-Year rows often run to end-of-section. */
+function truncateCareerLineHtml(html: string): string {
+  const lower = html.toLowerCase();
+  let end = html.length;
+  for (const marker of ["<br", "<div", "<b>"]) {
+    const idx = lower.indexOf(marker);
+    if (idx >= 0) end = Math.min(end, idx);
+  }
+  return html.slice(0, end);
+}
+
+export function seasonRowKey(
+  season: Pick<NcaaSeasonRow, "seasonLabel" | "teamName">,
+): string {
+  return `${season.seasonLabel}:${season.teamName}`;
+}
+
 function careerSeasonLabel(rawSeason: string): string | null {
   const trimmed = rawSeason.trim();
   const normalized = normalizeSeasonLabel(trimmed);
@@ -428,13 +445,13 @@ export function parseCareerYearByYearSeasons(
     const seasonLabel = careerSeasonLabel(match[1]);
     if (!seasonLabel) continue;
 
-    const body = stripHtmlText(match[2]);
-    const metaMatch = /^(.+?)\(([^)]+)\)\s*(?::\s*(.*))?$/i.exec(body);
+    const body = stripHtmlText(truncateCareerLineHtml(match[2]));
+    const metaMatch = /^(.+?)\(([^)]+)\)/i.exec(body);
     if (!metaMatch) continue;
 
     const teamName = metaMatch[1].replace(/&quote;/g, "'").trim();
     const leagueText = metaMatch[2].trim();
-    const statsText = (metaMatch[3] ?? "").trim();
+    const statsText = body.slice(metaMatch[0].length).replace(/^:\s*/, "").trim();
     if (!teamName || !leagueTagMatchesCareerLeague(leagueText, leagueTag)) continue;
 
     const pointsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i);

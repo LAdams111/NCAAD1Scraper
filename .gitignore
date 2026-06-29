@@ -154,4 +154,19 @@ scrape-ncaa-backfill.log
 scrape-ncaa-d2-backfill*.log
 scrape-usports-backfill*.log
 scrape-ccaa-backfill*.log
+audit-ccaa-missing-career*.log
+repair-ccaa-missing-career.log
 tmp-*.html
+
+# Generated audit/repair reports (local only)
+ccaa-missing-career-report*.json
+ccaa-misclassified-report.json
+usports-team-alias-report.json
+
+# Local WIP scripts (not committed)
+scripts/migrate-usports-shards.mjs
+scripts/generate-usports-team-aliases.mjs
+scripts/patch-usports-cache-names.mjs
+scripts/repair-usports-profiles.mjs
+scripts/repair-d2-links.mjs
+src/test/fixtures/player-stats-usports-2015.html

@@ -26,6 +26,8 @@
     "repair:d2-links:scan": "node scripts/repair-d2-links.mjs --scan --fetch-dob",
     "repair:d2-links:apply": "node scripts/repair-d2-links.mjs --apply",
     "repair:ccaa-profiles": "node scripts/repair-ccaa-profiles.mjs",
+    "audit:ccaa-missing-career": "node scripts/audit-ccaa-missing-career.mjs",
+    "repair:ccaa-missing-career": "node scripts/repair-ccaa-missing-career.mjs",
     "patch:ccaa-names": "node scripts/patch-ccaa-cache-names.mjs",
     "generate:ccaa-team-aliases": "node scripts/generate-ccaa-team-aliases.mjs",
     "scrape:discover": "node dist/index.js --discover-only --shard 0/4"

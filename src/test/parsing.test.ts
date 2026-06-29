@@ -160,6 +160,22 @@ describe("player page parsing", () => {
       ],
     );
   });
+
+  it("parses the last Year-By-Year career line before Awards markup", () => {
+    const fragment = readFileSync("src/test/fixtures/player-career-mullett.html", "utf8");
+    const seasons = parseCareerYearByYearSeasons(fragment, "CCAA");
+    assert.equal(seasons.length, 2);
+    assert.deepEqual(
+      seasons.map((season) => ({
+        seasonLabel: season.seasonLabel,
+        teamName: season.teamName,
+      })),
+      [
+        { seasonLabel: "2023-24", teamName: "Holland College" },
+        { seasonLabel: "2024-25", teamName: "Holland College" },
+      ],
+    );
+  });
 });
 
 describe("player bio parsing", () => {
