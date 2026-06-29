@@ -2,16 +2,34 @@
 export const NCAA_USBASKET_SEGMENT = "CCAA" as const;
 /** Primary tag in recent profile/AJAX stat blocks. */
 export const NCAA_USBASKET_TAG = "CCAA" as const;
-/** CCAA profile pages label seasons by conference or adjacent Canadian college tags. */
-export const NCAA_USBASKET_TAGS = [
+/** Member conferences / leagues that count as CCAA for ingest. */
+export const NCAA_USBASKET_MEMBER_TAGS = [
   NCAA_USBASKET_TAG,
-  "NAIA",
-  "NCAA2",
-  "JUCO",
+  "ACAA",
+  "AASC",
   "ACAC",
   "PacWest",
   "OCAA",
   "RSEQ",
+] as const;
+/** @deprecated Use NCAA_USBASKET_MEMBER_TAGS — US JUCO/NCAA tags must never match CCAA stats. */
+export const NCAA_USBASKET_TAGS = NCAA_USBASKET_MEMBER_TAGS;
+/** usbasket league labels that are never CCAA (US JUCO, NCAA, U Sports, pro, etc.). */
+export const NCAA_USBASKET_EXCLUDED_LEAGUE_TAGS = [
+  "JUCO",
+  "NAIA",
+  "NCAA1",
+  "NCAA2",
+  "NCCAA",
+  "USCAA",
+  "USPO",
+  "U-SPORTS",
+  "U SPORTS",
+  "NBA",
+  "EUROL",
+  "EUROcup",
+  "ESP-1",
+  "NCAA",
 ] as const;
 export const NCAA_USBASKET_INDEX_URL =
   `https://www.usbasket.com/${NCAA_USBASKET_SEGMENT}/basketball-Players.aspx` as const;

@@ -11,6 +11,8 @@ import {
   mergeSeasonRows,
   parseSeasonRowsFromIndexData,
   parseSeasonRowsFromPlayerHtml,
+  isExcludedCcaaLeagueLabel,
+  statsBlockMatchesCcaaLeague,
 } from "../scrape/playerSeason.js";
 import {
   parsePlayerBioFromHtml,
@@ -18,7 +20,7 @@ import {
 } from "../scrape/playerMeta.js";
 import { matchBdlExternalId, buildBdlLookup, isPlausibleCollegeAge, matchExternalId } from "../scrape/linking.js";
 import { normalizeSeasonLabel, calcPct } from "../utils/season.js";
-import { normalizeUsportsTeam, isValidUsportsTeamName } from "../utils/usportsTeams.js";
+import { normalizeUsportsTeam, isValidUsportsTeamName, isNonCcaaTeamLabel } from "../utils/usportsTeams.js";
 
 describe("season utils", () => {
   it("normalizes usbasket season labels", () => {
@@ -270,5 +272,35 @@ describe("CCAA team aliases", () => {
     assert.equal(normalizeUsportsTeam("Keyano College").name, "Keyano");
     assert.equal(isValidUsportsTeamName("College Montmorency"), true);
     assert.equal(normalizeUsportsTeam("College Montmorency").slug, "montmorency");
+    assert.equal(isValidUsportsTeamName("Capilano University"), true);
+    assert.equal(normalizeUsportsTeam("Capilano University").slug, "capilano");
+    assert.equal(isValidUsportsTeamName("Northern Alberta Institute of Technology"), true);
+    assert.equal(normalizeUsportsTeam("Northern Alberta Institute of Technology").slug, "nait");
+    assert.equal(isValidUsportsTeamName("St. Mary's University, Calgary"), true);
+    assert.equal(normalizeUsportsTeam("St. Mary's University, Calgary").slug, "stmu");
+  });
+
+  it("rejects US JUCO Mohawk Valley — not CCAA Mohawk College", () => {
+    assert.equal(isNonCcaaTeamLabel("Mohawk Valley"), true);
+    assert.equal(isValidUsportsTeamName("Mohawk Valley"), false);
+    assert.equal(isValidUsportsTeamName("Mohawk"), true);
+    assert.equal(normalizeUsportsTeam("Mohawk Valley").name, "Mohawk Valley");
+  });
+
+  it("rejects JUCO stat blocks for CCAA ingest", () => {
+    assert.equal(isExcludedCcaaLeagueLabel("JUCO"), true);
+    assert.equal(isExcludedCcaaLeagueLabel("Season: 2018-2019 (JUCO)"), true);
+    assert.equal(isExcludedCcaaLeagueLabel("CCAA"), false);
+
+    const jucoHtml =
+      '<h4 class="plstats-head">Season: 2018-2019 (JUCO) </h4><div class="dvgamesstats"><table class="my_Title"><tr class="my_Headers"><td colspan="16"><b>AVERAGES</b></td></tr><tr class="my_pStats1"><td class="headcol">Mohawk Valley</td><td>27</td><td>16.2</td><td>8.0</td><td>57.1%</td><td>41.0%</td><td>80.0%</td><td>0.8</td><td>2.4</td><td>3.2</td><td>0.9</td><td>2.0</td><td>0.4</td><td>0.9</td><td>1.8</td></tr></table></div>';
+    assert.equal(statsBlockMatchesCcaaLeague(jucoHtml), false);
+    assert.equal(parseNcaaSeasonFromStatsHtml(jucoHtml), null);
+  });
+
+  it("rejects US JUCO St.Clair Co.CC — not CCAA St Clair", () => {
+    assert.equal(isNonCcaaTeamLabel("St.Clair Co.CC"), true);
+    assert.equal(isValidUsportsTeamName("St.Clair Co.CC"), false);
+    assert.equal(isValidUsportsTeamName("St.Clair"), true);
   });
 });

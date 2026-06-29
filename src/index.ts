@@ -36,6 +36,8 @@ Options:
   --fresh                Ignore checkpoint and reprocess all
   --limit <n>            Cap players processed (testing)
   --player-slug <id>     Single player test (usbasket player ID)
+  --rediscover           Re-crawl CCAA index and refresh season cache (shard 0 only)
+  --discover-only        Crawl index, save cache, and exit (shard 0 only)
   --delay <ms>           Override request delay (default from .env)
   --shard <n>            Shard index (use with --shards, or pass n/total e.g. 0/2)
   --shards <n>           Total parallel shards (default: 1)
@@ -71,6 +73,8 @@ function parseArgs(argv: string[]): Omit<ScrapeOptions, "requestDelayMs" | "inde
   let showHelp = false;
   let shardIndex: number | undefined;
   let shardCount: number | undefined;
+  let rediscover = false;
+  let discoverOnly = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -128,6 +132,16 @@ function parseArgs(argv: string[]): Omit<ScrapeOptions, "requestDelayMs" | "inde
         playerSlug = value.trim();
         break;
       }
+      case "--rediscover":
+        rediscover = true;
+        backfill = true;
+        resume = true;
+        break;
+      case "--discover-only":
+        discoverOnly = true;
+        backfill = true;
+        resume = false;
+        break;
       case "--delay": {
         const value = argv[++i];
         if (!value) throw new Error("--delay requires a value");
@@ -173,6 +187,8 @@ function parseArgs(argv: string[]): Omit<ScrapeOptions, "requestDelayMs" | "inde
     linkCachePath: shardLinkCachePath(shard.shardIndex, shard.shardCount),
     shardIndex: shard.shardIndex,
     shardCount: shard.shardCount,
+    rediscover,
+    discoverOnly,
     showHelp,
   };
 }

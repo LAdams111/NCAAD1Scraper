@@ -185,6 +185,8 @@ export interface ScrapeOptions {
   linkCachePath: string;
   shardIndex: number;
   shardCount: number;
+  rediscover?: boolean;
+  discoverOnly?: boolean;
 }
 
 export interface ScrapeSummary {

@@ -1,5 +1,10 @@
 import { load } from "cheerio";
-import { NCAA_USBASKET_TAG, NCAA_USBASKET_TAGS } from "../division.js";
+import {
+  NCAA_USBASKET_EXCLUDED_LEAGUE_TAGS,
+  NCAA_USBASKET_MEMBER_TAGS,
+  NCAA_USBASKET_TAG,
+  NCAA_USBASKET_TAGS,
+} from "../division.js";
 import type { NcaaSeasonRow, UsbasketIndexRow } from "../types.js";
 import {
   calcPct,
@@ -9,6 +14,7 @@ import {
   seasonLabelFromYearParam,
 } from "../utils/season.js";
 import { teamAbbreviation } from "../utils/teams.js";
+import { isValidUsportsTeamName } from "../utils/usportsTeams.js";
 import type { UsbasketClient } from "../usbasketClient.js";
 import { buildPlayerSeasonRecord } from "../transform.js";
 import type { NcaaPlayerSeasonRecord } from "../types.js";
@@ -87,6 +93,14 @@ function seasonHasStats(season: NcaaSeasonRow): boolean {
   return season.gamesPlayed > 0 || season.pointsPerGame > 0;
 }
 
+export function seasonsHaveRealStats(seasons: NcaaSeasonRow[]): boolean {
+  return seasons.some(seasonHasStats);
+}
+
+export function countIndexSeasonRows(seasons: NcaaSeasonRow[]): number {
+  return seasons.length;
+}
+
 export function parseSeasonRowsFromIndexData(
   rows: UsbasketIndexRow[],
   defaultSeasonLabel: string,
@@ -123,17 +137,81 @@ export function parseSeasonRowsFromIndexData(
   return results;
 }
 
-function htmlMatchesLeagueTag(html: string, tags: readonly string[] = NCAA_USBASKET_TAGS): boolean {
+function normalizeLeagueLabel(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function isExcludedCcaaLeagueLabel(leagueText: string): boolean {
+  const normalized = normalizeLeagueLabel(leagueText);
+  return NCAA_USBASKET_EXCLUDED_LEAGUE_TAGS.some((tag) => {
+    const target = normalizeLeagueLabel(tag);
+    return (
+      normalized === target ||
+      normalized.startsWith(`${target},`) ||
+      normalized.includes(` ${target}`) ||
+      normalized.includes(target)
+    );
+  });
+}
+
+function htmlMatchesLeagueTag(
+  html: string,
+  tags: readonly string[] = NCAA_USBASKET_MEMBER_TAGS,
+): boolean {
   const lower = html.toLowerCase();
   return tags.some((tag) => lower.includes(tag.toLowerCase()));
 }
 
 function headingMatchesLeagueTag(
   headingText: string,
-  tags: readonly string[] = NCAA_USBASKET_TAGS,
+  tags: readonly string[] = NCAA_USBASKET_MEMBER_TAGS,
 ): boolean {
   const lower = headingText.toLowerCase();
   return tags.some((tag) => lower.includes(tag.toLowerCase()));
+}
+
+function isCcaaIngestTags(tags: readonly string[]): boolean {
+  return (
+    tags.length === NCAA_USBASKET_MEMBER_TAGS.length &&
+    tags.every((tag, index) => tag === NCAA_USBASKET_MEMBER_TAGS[index])
+  );
+}
+
+function teamNameFromStatsHtml(html: string): string | null {
+  const $ = load(html);
+  const summaryTable = $("table.my_Title").first();
+  if (!summaryTable.length) return null;
+  const averagesRow = findAveragesRow($, summaryTable);
+  if (!averagesRow.length) return null;
+  const teamName = averagesRow.find("td").first().text().replace(/&quote;/g, "'").trim();
+  return teamName || null;
+}
+
+/** Accept CCAA member stat blocks; reject JUCO/NCAA headings outright. */
+export function statsBlockMatchesCcaaLeague(
+  html: string,
+  tags: readonly string[] = NCAA_USBASKET_MEMBER_TAGS,
+): boolean {
+  const $ = load(html);
+  const headingText = $("h4.plstats-head, h4").first().text().trim();
+  if (!headingText) return false;
+
+  if (!isCcaaIngestTags(tags)) {
+    return headingMatchesLeagueTag(headingText, tags) || htmlMatchesLeagueTag(html, tags);
+  }
+
+  if (isExcludedCcaaLeagueLabel(headingText)) {
+    if (/juco/i.test(headingText)) return false;
+    if (/naia/i.test(headingText)) {
+      const teamName = teamNameFromStatsHtml(html);
+      return Boolean(teamName && isValidUsportsTeamName(teamName));
+    }
+    return false;
+  }
+
+  if (headingMatchesLeagueTag(headingText, tags)) return true;
+  if (/\(canada\)/i.test(headingText)) return true;
+  return htmlMatchesLeagueTag(html, tags);
 }
 
 function findAveragesRow($: ReturnType<typeof load>, summaryTable: ReturnType<ReturnType<typeof load>>) {
@@ -154,10 +232,10 @@ function findAveragesRow($: ReturnType<typeof load>, summaryTable: ReturnType<Re
 /** Parse one usbasket stats block (profile page or PlayerStatsAjax HTML). */
 export function parseNcaaSeasonFromStatsHtml(
   html: string,
-  usbasketTag: string | readonly string[] = NCAA_USBASKET_TAGS,
+  usbasketTag: string | readonly string[] = NCAA_USBASKET_MEMBER_TAGS,
 ): NcaaSeasonRow | null {
   const tags = typeof usbasketTag === "string" ? [usbasketTag] : usbasketTag;
-  if (!html || html === "No Data" || !htmlMatchesLeagueTag(html, tags)) return null;
+  if (!html || html === "No Data" || !statsBlockMatchesCcaaLeague(html, tags)) return null;
 
   const $ = load(html);
   const headingText = $("h4.plstats-head, h4").first().text();
@@ -303,10 +381,28 @@ function parseCareerPct(text: string, patterns: RegExp[]): number | null {
   return null;
 }
 
-function leagueTagMatchesCareerLeague(leagueText: string, leagueTag: string): boolean {
+function leagueTagMatchesCareerLeague(
+  leagueText: string,
+  leagueTag: string = NCAA_USBASKET_TAG,
+  memberTags: readonly string[] = NCAA_USBASKET_MEMBER_TAGS,
+): boolean {
+  if (isExcludedCcaaLeagueLabel(leagueText)) return false;
+
   const normalized = leagueText.trim().toLowerCase();
-  const target = leagueTag.trim().toLowerCase();
-  return normalized === target || normalized.startsWith(`${target},`) || normalized.includes(` ${target}`);
+  const tags =
+    leagueTag.trim().toLowerCase() === NCAA_USBASKET_TAG.toLowerCase()
+      ? memberTags
+      : [leagueTag];
+
+  return tags.some((tag) => {
+    const target = tag.trim().toLowerCase();
+    return (
+      normalized === target ||
+      normalized.startsWith(`${target},`) ||
+      normalized.includes(` ${target}`) ||
+      normalized.includes(target)
+    );
+  });
 }
 
 /** Parse subscriber "Year-By-Year Career" lines on player profile pages. */

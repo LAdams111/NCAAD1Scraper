@@ -27,7 +27,8 @@
     "repair:d2-links:apply": "node scripts/repair-d2-links.mjs --apply",
     "repair:ccaa-profiles": "node scripts/repair-ccaa-profiles.mjs",
     "patch:ccaa-names": "node scripts/patch-ccaa-cache-names.mjs",
-    "generate:ccaa-team-aliases": "node scripts/generate-ccaa-team-aliases.mjs"
+    "generate:ccaa-team-aliases": "node scripts/generate-ccaa-team-aliases.mjs",
+    "scrape:discover": "node dist/index.js --discover-only --shard 0/4"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

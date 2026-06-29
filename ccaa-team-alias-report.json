@@ -1,313 +1,558 @@
 {
-  "generatedAt": "2026-06-29T13:06:22.013Z",
+  "generatedAt": "2026-06-29T15:55:53.701Z",
+  "source": "https://www.usbasket.com/CCAA/teams.aspx",
   "aliasMap": {
-    "vanier-college": "vanier"
+    "crandall-university": "crandall",
+    "holland-college": "holland",
+    "university-of-kings-college": "king-s-univ",
+    "mount-allison-university": "mount-allison",
+    "mount-st-vincent-university-in-halifax": "msvu",
+    "st-thomas-university": "st-thomas",
+    "unb-saint-john": "unbsj",
+    "university-of-alberta-augustana": "alb-augustana",
+    "concordia-university-of-edmonton": "concordia",
+    "keyano-college": "keyano",
+    "lakeland-college": "lakeland",
+    "northern-alberta-institute-of-technology": "nait",
+    "northwestern-polytechnic": "nwp",
+    "the-kings-university": "the-king-s",
+    "ambrose-university": "ambrose",
+    "briercrest-college": "briercrest",
+    "lethbridge-college": "lethbridge",
+    "medicine-hat-college": "medicine-hat",
+    "olds-college": "olds",
+    "red-deer-college": "red-deer",
+    "south-alberta-institute-of-technology": "sait",
+    "st-marys-university-calgary": "stmu",
+    "algonquin-college": "algonquin",
+    "centennial-college": "centennial",
+    "durham-college": "durham",
+    "fleming-college": "fleming",
+    "george-brown-college": "george-brown",
+    "georgian-college": "georgian",
+    "college-la-cite": "la-cite",
+    "loyalist-college": "loyalist",
+    "seneca-college": "seneca",
+    "st-lawrence-college-kingston": "st-lawrence",
+    "canadore-college": "canadore",
+    "conestoga-college": "conestoga",
+    "fanshawe-college": "fanshawe",
+    "humber-college": "humber",
+    "lambton-college": "lambton",
+    "mohawk-college": "mohawk",
+    "niagara-college": "niagara",
+    "redeemer-university-college": "redeemer",
+    "sheridan-college": "sheridan",
+    "st-clair-college": "st-clair",
+    "camosun-college": "camosun",
+    "capilano-university": "capilano",
+    "columbia-bible-college": "cbc",
+    "douglas-college": "douglas",
+    "langara-college": "langara",
+    "okanagan-college": "okanagan",
+    "vancouver-island-university": "viu",
+    "college-ahuntsic": "ahuntsic",
+    "champlain-college-saint-lambert": "ch-st-lambert",
+    "dawson-college": "dawson",
+    "cegep-edouard-montpetit": "edouard-montp",
+    "college-jean-de-brebeuf": "jean-de-breb",
+    "john-abbott-college": "john-abbott",
+    "college-montmorency": "montmorency",
+    "cegep-loutaouais": "outaouais",
+    "cegep-de-sainte-foy": "sainte-foy",
+    "universite-de-sherbrooke": "sherbrooke",
+    "cegep-de-thetford": "thetford",
+    "vanier-college": "vanier",
+    "king-s-univ": "the-king-s"
   },
   "allTeams": [
     {
       "teamName": "Ahuntsic",
-      "teamAbbreviation": "AHU",
-      "slug": "ahuntsic"
+      "teamAbbreviation": "AHUNTS",
+      "slug": "ahuntsic",
+      "conference": "RSEQ",
+      "usbasketSlug": "College-Ahuntsic",
+      "fullName": "College Ahuntsic"
     },
     {
       "teamName": "Alb-Augustana",
-      "teamAbbreviation": "ALB",
-      "slug": "alb-augustana"
+      "teamAbbreviation": "ALB-AU",
+      "slug": "alb-augustana",
+      "conference": "ACAC-North",
+      "usbasketSlug": "University-of-Alberta-Augustana",
+      "fullName": "University Of Alberta Augustana"
     },
     {
       "teamName": "Algonquin",
-      "teamAbbreviation": "ALG",
-      "slug": "algonquin"
+      "teamAbbreviation": "ALGONQ",
+      "slug": "algonquin",
+      "conference": "OCAA-East",
+      "usbasketSlug": "Algonquin-College",
+      "fullName": "Algonquin College"
     },
     {
       "teamName": "Ambrose",
-      "teamAbbreviation": "AMB",
-      "slug": "ambrose"
+      "teamAbbreviation": "AMBROS",
+      "slug": "ambrose",
+      "conference": "ACAC-South",
+      "usbasketSlug": "Ambrose-University",
+      "fullName": "Ambrose University"
     },
     {
       "teamName": "Briercrest",
-      "teamAbbreviation": "BRI",
-      "slug": "briercrest"
+      "teamAbbreviation": "BRIERC",
+      "slug": "briercrest",
+      "conference": "ACAC-South",
+      "usbasketSlug": "Briercrest-College",
+      "fullName": "Briercrest College"
     },
     {
       "teamName": "Camosun",
-      "teamAbbreviation": "CAM",
-      "slug": "camosun"
+      "teamAbbreviation": "CAMOSU",
+      "slug": "camosun",
+      "conference": "PacWest",
+      "usbasketSlug": "Camosun-College",
+      "fullName": "Camosun College"
     },
     {
       "teamName": "Canadore",
-      "teamAbbreviation": "CAN",
-      "slug": "canadore"
+      "teamAbbreviation": "CANADO",
+      "slug": "canadore",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Canadore-College",
+      "fullName": "Canadore College"
     },
     {
       "teamName": "Capilano",
-      "teamAbbreviation": "CAP",
-      "slug": "capilano"
+      "teamAbbreviation": "CAPILA",
+      "slug": "capilano",
+      "conference": "PacWest",
+      "usbasketSlug": "Capilano-University",
+      "fullName": "Capilano University"
     },
     {
       "teamName": "Cbc",
       "teamAbbreviation": "CBC",
-      "slug": "cbc"
+      "slug": "cbc",
+      "conference": "PacWest",
+      "usbasketSlug": "Columbia-Bible-College",
+      "fullName": "Columbia Bible College"
     },
     {
       "teamName": "Centennial",
-      "teamAbbreviation": "CEN",
-      "slug": "centennial"
+      "teamAbbreviation": "CENTEN",
+      "slug": "centennial",
+      "conference": "OCAA-East",
+      "usbasketSlug": "Centennial-College",
+      "fullName": "Centennial College"
     },
     {
       "teamName": "Ch.-St-Lambert",
-      "teamAbbreviation": "CH.",
-      "slug": "ch-st-lambert"
+      "teamAbbreviation": "CH.-ST",
+      "slug": "ch-st-lambert",
+      "conference": "RSEQ",
+      "usbasketSlug": "Champlain-College-Saint-Lambert",
+      "fullName": "Champlain College Saint Lambert"
     },
     {
       "teamName": "Concordia",
-      "teamAbbreviation": "CON",
-      "slug": "concordia"
+      "teamAbbreviation": "CONCOR",
+      "slug": "concordia",
+      "conference": "ACAC-North",
+      "usbasketSlug": "Concordia-University-of-Edmonton",
+      "fullName": "Concordia University Of Edmonton"
     },
     {
       "teamName": "Conestoga",
-      "teamAbbreviation": "CON",
-      "slug": "conestoga"
+      "teamAbbreviation": "CONEST",
+      "slug": "conestoga",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Conestoga-College",
+      "fullName": "Conestoga College"
     },
     {
       "teamName": "Crandall",
-      "teamAbbreviation": "CRA",
-      "slug": "crandall"
+      "teamAbbreviation": "CRANDA",
+      "slug": "crandall",
+      "conference": "ACAA-AASC",
+      "usbasketSlug": "Crandall-University",
+      "fullName": "Crandall University"
     },
     {
       "teamName": "Dawson",
-      "teamAbbreviation": "DAW",
-      "slug": "dawson"
+      "teamAbbreviation": "DAWSON",
+      "slug": "dawson",
+      "conference": "RSEQ",
+      "usbasketSlug": "Dawson-College",
+      "fullName": "Dawson College"
     },
     {
       "teamName": "Douglas",
-      "teamAbbreviation": "DOU",
-      "slug": "douglas"
+      "teamAbbreviation": "DOUGLA",
+      "slug": "douglas",
+      "conference": "PacWest",
+      "usbasketSlug": "Douglas-College",
+      "fullName": "Douglas College"
     },
     {
       "teamName": "Durham",
-      "teamAbbreviation": "DUR",
-      "slug": "durham"
+      "teamAbbreviation": "DURHAM",
+      "slug": "durham",
+      "conference": "OCAA-East",
+      "usbasketSlug": "Durham-College",
+      "fullName": "Durham College"
     },
     {
       "teamName": "Edouard-Montp.",
-      "teamAbbreviation": "EDO",
-      "slug": "edouard-montp"
+      "teamAbbreviation": "EDOUAR",
+      "slug": "edouard-montp",
+      "conference": "RSEQ",
+      "usbasketSlug": "Cegep-Edouard-Montpetit",
+      "fullName": "Cegep Edouard Montpetit"
     },
     {
       "teamName": "Fanshawe",
-      "teamAbbreviation": "FAN",
-      "slug": "fanshawe"
+      "teamAbbreviation": "FANSHA",
+      "slug": "fanshawe",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Fanshawe-College",
+      "fullName": "Fanshawe College"
     },
     {
       "teamName": "Fleming",
-      "teamAbbreviation": "FLE",
-      "slug": "fleming"
+      "teamAbbreviation": "FLEMIN",
+      "slug": "fleming",
+      "conference": "OCAA-East",
+      "usbasketSlug": "Fleming-College",
+      "fullName": "Fleming College"
     },
     {
       "teamName": "George Brown",
       "teamAbbreviation": "GB",
-      "slug": "george-brown"
+      "slug": "george-brown",
+      "conference": "OCAA-East",
+      "usbasketSlug": "George-Brown-College",
+      "fullName": "George Brown College"
     },
     {
       "teamName": "Georgian",
-      "teamAbbreviation": "GEO",
-      "slug": "georgian"
+      "teamAbbreviation": "GEORGI",
+      "slug": "georgian",
+      "conference": "OCAA-East",
+      "usbasketSlug": "Georgian-College",
+      "fullName": "Georgian College"
     },
     {
       "teamName": "Holland",
-      "teamAbbreviation": "HOL",
-      "slug": "holland"
+      "teamAbbreviation": "HOLLAN",
+      "slug": "holland",
+      "conference": "ACAA-AASC",
+      "usbasketSlug": "Holland-College",
+      "fullName": "Holland College"
     },
     {
       "teamName": "Humber",
-      "teamAbbreviation": "HUM",
-      "slug": "humber"
+      "teamAbbreviation": "HUMBER",
+      "slug": "humber",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Humber-College",
+      "fullName": "Humber College"
     },
     {
       "teamName": "Jean-De-Breb.",
-      "teamAbbreviation": "JEA",
-      "slug": "jean-de-breb"
+      "teamAbbreviation": "JEAN-D",
+      "slug": "jean-de-breb",
+      "conference": "RSEQ",
+      "usbasketSlug": "College-Jean-de-Brebeuf",
+      "fullName": "College Jean De Brebeuf"
     },
     {
       "teamName": "John Abbott",
       "teamAbbreviation": "JA",
-      "slug": "john-abbott"
+      "slug": "john-abbott",
+      "conference": "RSEQ",
+      "usbasketSlug": "John-Abbott-College",
+      "fullName": "John Abbott College"
     },
     {
       "teamName": "Keyano",
-      "teamAbbreviation": "KEY",
-      "slug": "keyano"
+      "teamAbbreviation": "KEYANO",
+      "slug": "keyano",
+      "conference": "ACAC-North",
+      "usbasketSlug": "Keyano-College",
+      "fullName": "Keyano College"
     },
     {
       "teamName": "King'S Univ.",
       "teamAbbreviation": "KU",
-      "slug": "king-s-univ"
+      "slug": "king-s-univ",
+      "conference": "ACAA-AASC",
+      "usbasketSlug": "University-of-Kings-College",
+      "fullName": "University Of Kings College"
     },
     {
       "teamName": "La Cite",
       "teamAbbreviation": "LC",
-      "slug": "la-cite"
+      "slug": "la-cite",
+      "conference": "OCAA-East",
+      "usbasketSlug": "College-La-Cite",
+      "fullName": "College La Cite"
     },
     {
       "teamName": "Lakeland",
-      "teamAbbreviation": "LAK",
-      "slug": "lakeland"
+      "teamAbbreviation": "LAKELA",
+      "slug": "lakeland",
+      "conference": "ACAC-North",
+      "usbasketSlug": "Lakeland-College",
+      "fullName": "Lakeland College"
     },
     {
       "teamName": "Lambton",
-      "teamAbbreviation": "LAM",
-      "slug": "lambton"
+      "teamAbbreviation": "LAMBTO",
+      "slug": "lambton",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Lambton-College",
+      "fullName": "Lambton College"
     },
     {
       "teamName": "Langara",
-      "teamAbbreviation": "LAN",
-      "slug": "langara"
+      "teamAbbreviation": "LANGAR",
+      "slug": "langara",
+      "conference": "PacWest",
+      "usbasketSlug": "Langara-College",
+      "fullName": "Langara College"
     },
     {
       "teamName": "Lethbridge",
-      "teamAbbreviation": "LET",
-      "slug": "lethbridge"
+      "teamAbbreviation": "LETHBR",
+      "slug": "lethbridge",
+      "conference": "ACAC-South",
+      "usbasketSlug": "Lethbridge-College",
+      "fullName": "Lethbridge College"
     },
     {
       "teamName": "Loyalist",
-      "teamAbbreviation": "LOY",
-      "slug": "loyalist"
+      "teamAbbreviation": "LOYALI",
+      "slug": "loyalist",
+      "conference": "OCAA-East",
+      "usbasketSlug": "Loyalist-College",
+      "fullName": "Loyalist College"
     },
     {
       "teamName": "Medicine Hat",
       "teamAbbreviation": "MH",
-      "slug": "medicine-hat"
+      "slug": "medicine-hat",
+      "conference": "ACAC-South",
+      "usbasketSlug": "Medicine-Hat-College",
+      "fullName": "Medicine Hat College"
     },
     {
       "teamName": "Mohawk",
-      "teamAbbreviation": "MOH",
-      "slug": "mohawk"
+      "teamAbbreviation": "MOHAWK",
+      "slug": "mohawk",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Mohawk-College",
+      "fullName": "Mohawk College"
     },
     {
       "teamName": "Montmorency",
-      "teamAbbreviation": "MON",
-      "slug": "montmorency"
+      "teamAbbreviation": "MONTMO",
+      "slug": "montmorency",
+      "conference": "RSEQ",
+      "usbasketSlug": "College-Montmorency",
+      "fullName": "College Montmorency"
     },
     {
       "teamName": "Mount Allison",
       "teamAbbreviation": "MA",
-      "slug": "mount-allison"
+      "slug": "mount-allison",
+      "conference": "ACAA-AASC",
+      "usbasketSlug": "Mount-Allison-University",
+      "fullName": "Mount Allison University"
     },
     {
       "teamName": "Msvu",
-      "teamAbbreviation": "MSV",
-      "slug": "msvu"
+      "teamAbbreviation": "MSVU",
+      "slug": "msvu",
+      "conference": "ACAA-AASC",
+      "usbasketSlug": "Mount-St-Vincent-University-in-Halifax",
+      "fullName": "Mount St Vincent University In Halifax"
     },
     {
       "teamName": "Nait",
-      "teamAbbreviation": "NAI",
-      "slug": "nait"
+      "teamAbbreviation": "NAIT",
+      "slug": "nait",
+      "conference": "ACAC-North",
+      "usbasketSlug": "Northern-Alberta-Institute-of-Technology",
+      "fullName": "Northern Alberta Institute Of Technology"
     },
     {
       "teamName": "Niagara",
-      "teamAbbreviation": "NIA",
-      "slug": "niagara"
+      "teamAbbreviation": "NIAGAR",
+      "slug": "niagara",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Niagara-College",
+      "fullName": "Niagara College"
     },
     {
       "teamName": "Nwp",
       "teamAbbreviation": "NWP",
-      "slug": "nwp"
+      "slug": "nwp",
+      "conference": "ACAC-North",
+      "usbasketSlug": "Northwestern-Polytechnic",
+      "fullName": "Northwestern Polytechnic"
     },
     {
       "teamName": "Okanagan",
-      "teamAbbreviation": "OKA",
-      "slug": "okanagan"
+      "teamAbbreviation": "OKANAG",
+      "slug": "okanagan",
+      "conference": "PacWest",
+      "usbasketSlug": "Okanagan-College",
+      "fullName": "Okanagan College"
     },
     {
       "teamName": "Olds",
-      "teamAbbreviation": "OLD",
-      "slug": "olds"
+      "teamAbbreviation": "OLDS",
+      "slug": "olds",
+      "conference": "ACAC-South",
+      "usbasketSlug": "Olds-College",
+      "fullName": "Olds College"
     },
     {
       "teamName": "Outaouais",
-      "teamAbbreviation": "OUT",
-      "slug": "outaouais"
+      "teamAbbreviation": "OUTAOU",
+      "slug": "outaouais",
+      "conference": "RSEQ",
+      "usbasketSlug": "Cegep-LOutaouais",
+      "fullName": "Cegep Loutaouais"
     },
     {
       "teamName": "Red Deer",
       "teamAbbreviation": "RD",
-      "slug": "red-deer"
+      "slug": "red-deer",
+      "conference": "ACAC-South",
+      "usbasketSlug": "Red-Deer-College",
+      "fullName": "Red Deer College"
     },
     {
       "teamName": "Redeemer",
-      "teamAbbreviation": "RED",
-      "slug": "redeemer"
+      "teamAbbreviation": "REDEEM",
+      "slug": "redeemer",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Redeemer-University-College",
+      "fullName": "Redeemer University College"
     },
     {
       "teamName": "Sainte-Foy",
-      "teamAbbreviation": "SAI",
-      "slug": "sainte-foy"
+      "teamAbbreviation": "SAINTE",
+      "slug": "sainte-foy",
+      "conference": "RSEQ",
+      "usbasketSlug": "Cegep-de-Sainte-Foy",
+      "fullName": "Cegep De Sainte Foy"
     },
     {
       "teamName": "Sait",
-      "teamAbbreviation": "SAI",
-      "slug": "sait"
+      "teamAbbreviation": "SAIT",
+      "slug": "sait",
+      "conference": "ACAC-South",
+      "usbasketSlug": "South-Alberta-Institute-of-Technology",
+      "fullName": "South Alberta Institute Of Technology"
     },
     {
       "teamName": "Seneca",
-      "teamAbbreviation": "SEN",
-      "slug": "seneca"
+      "teamAbbreviation": "SENECA",
+      "slug": "seneca",
+      "conference": "OCAA-East",
+      "usbasketSlug": "Seneca-College",
+      "fullName": "Seneca College"
     },
     {
       "teamName": "Sherbrooke",
-      "teamAbbreviation": "SHE",
-      "slug": "sherbrooke"
+      "teamAbbreviation": "SHERBR",
+      "slug": "sherbrooke",
+      "conference": "RSEQ",
+      "usbasketSlug": "Universite-de-Sherbrooke",
+      "fullName": "Universite De Sherbrooke"
     },
     {
       "teamName": "Sheridan",
-      "teamAbbreviation": "SHE",
-      "slug": "sheridan"
+      "teamAbbreviation": "SHERID",
+      "slug": "sheridan",
+      "conference": "OCAA-West",
+      "usbasketSlug": "Sheridan-College",
+      "fullName": "Sheridan College"
     },
     {
       "teamName": "St.Clair",
-      "teamAbbreviation": "ST.",
-      "slug": "st-clair"
+      "teamAbbreviation": "ST.CLA",
+      "slug": "st-clair",
+      "conference": "OCAA-West",
+      "usbasketSlug": "St-Clair-College",
+      "fullName": "St Clair College"
     },
     {
       "teamName": "St.Lawrence",
-      "teamAbbreviation": "ST.",
-      "slug": "st-lawrence"
+      "teamAbbreviation": "ST.LAW",
+      "slug": "st-lawrence",
+      "conference": "OCAA-East",
+      "usbasketSlug": "St-Lawrence-College-Kingston",
+      "fullName": "St Lawrence College Kingston"
     },
     {
       "teamName": "St.Thomas",
-      "teamAbbreviation": "ST.",
-      "slug": "st-thomas"
+      "teamAbbreviation": "ST.THO",
+      "slug": "st-thomas",
+      "conference": "ACAA-AASC",
+      "usbasketSlug": "St-Thomas-University",
+      "fullName": "St Thomas University"
     },
     {
       "teamName": "Stmu",
-      "teamAbbreviation": "STM",
-      "slug": "stmu"
+      "teamAbbreviation": "STMU",
+      "slug": "stmu",
+      "conference": "ACAC-South",
+      "usbasketSlug": "St-Marys-University-Calgary",
+      "fullName": "St Marys University Calgary"
     },
     {
       "teamName": "The King'S",
       "teamAbbreviation": "TK",
-      "slug": "the-king-s"
+      "slug": "the-king-s",
+      "conference": "ACAC-North",
+      "usbasketSlug": "The-Kings-University",
+      "fullName": "The Kings University"
     },
     {
       "teamName": "Thetford",
-      "teamAbbreviation": "THE",
-      "slug": "thetford"
+      "teamAbbreviation": "THETFO",
+      "slug": "thetford",
+      "conference": "RSEQ",
+      "usbasketSlug": "Cegep-de-Thetford",
+      "fullName": "Cegep De Thetford"
     },
     {
       "teamName": "Unbsj",
-      "teamAbbreviation": "UNB",
-      "slug": "unbsj"
+      "teamAbbreviation": "UNBSJ",
+      "slug": "unbsj",
+      "conference": "ACAA-AASC",
+      "usbasketSlug": "UNB-Saint-John",
+      "fullName": "Unb Saint John"
     },
     {
       "teamName": "Vanier",
-      "teamAbbreviation": "VAN",
-      "slug": "vanier"
+      "teamAbbreviation": "VANIER",
+      "slug": "vanier",
+      "conference": "RSEQ",
+      "usbasketSlug": "Vanier-College",
+      "fullName": "Vanier College"
     },
     {
       "teamName": "Viu",
       "teamAbbreviation": "VIU",
-      "slug": "viu"
+      "slug": "viu",
+      "conference": "PacWest",
+      "usbasketSlug": "Vancouver-Island-University",
+      "fullName": "Vancouver Island University"
     }
   ]
 }

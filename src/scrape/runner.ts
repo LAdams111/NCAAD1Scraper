@@ -22,22 +22,24 @@ import {
 } from "./checkpoint.js";
 import {
   DEFAULT_SEASON_CACHE,
+  countSeasonCacheStats,
   discoverAllPlayers,
-  fetchIndexSeasonsForPlayer,
   emptySeasonCache,
+  fetchIndexSeasonsForPlayer,
   loadSeasonCache,
   lookupFirstIndexSeasonForPlayer,
   lookupPlayerMetaFromIndex,
-  resolvePlayerFromIndex,
   saveSeasonCache,
+  seasonCacheNeedsRediscovery,
 } from "./discovery.js";
 import { buildBioPayload, createLinkResolver, type LinkResolver } from "./linking.js";
 import { parsePlayerBioFromHtml, isPlaceholderDisplayName } from "./playerMeta.js";
-import { filterValidUsportsSeasons, isValidUsportsTeamName } from "../utils/usportsTeams.js";
+import { filterValidUsportsSeasons, isNonCcaaTeamLabel, isValidUsportsTeamName, teamNameWasRewritten } from "../utils/usportsTeams.js";
 import {
   buildRecordsFromSeasonRows,
   collectAllNcaaSeasons,
   mergeSeasonRows,
+  seasonsHaveRealStats,
 } from "./playerSeason.js";
 import { loadSlugCache, saveSlugCache } from "./slugCache.js";
 import type { NcaaSeasonRow } from "../types.js";
@@ -50,6 +52,34 @@ import {
 function formatSeasonLabels(seasons: NcaaSeasonRow[]): string {
   return seasons.map((season) => season.seasonLabel).join(", ");
 }
+
+function syntheticBio(
+  playerId: string,
+  displayName: string,
+  position: string | null,
+): NcaaPlayerBio {
+  return {
+    playerId,
+    displayName,
+    birthDate: null,
+    position,
+    heightCm: null,
+    weightKg: null,
+    hometown: null,
+  };
+}
+
+function playerQueuePriority(
+  playerId: string,
+  seasonCache: CachedPlayerSeasons | null | undefined,
+): number {
+  const seasons = seasonCache?.players[playerId]?.seasons ?? [];
+  if (seasonsHaveRealStats(seasons)) return 0;
+  if (seasons.length > 0) return 1;
+  return 2;
+}
+
+const SEASON_CACHE_SAVE_EVERY = 25;
 
 async function fetchPlayerHtml(
   client: UsbasketClient,
@@ -124,6 +154,18 @@ function filterUsportsSeasonRows(
   const valid = filterValidUsportsSeasons(seasons);
   for (const season of seasons) {
     if (isValidUsportsTeamName(season.teamName)) continue;
+    if (isNonCcaaTeamLabel(season.teamName)) {
+      console.log(
+        `[skip-team] ${playerId} ${displayName}: ${season.teamName} (${season.seasonLabel}) US/other league — not CCAA`,
+      );
+      continue;
+    }
+    if (teamNameWasRewritten(season.teamName)) {
+      console.log(
+        `[skip-team] ${playerId} ${displayName}: ${season.teamName} (${season.seasonLabel}) ambiguous CCAA team match`,
+      );
+      continue;
+    }
     console.log(
       `[skip-team] ${playerId} ${displayName}: ${season.teamName} (${season.seasonLabel}) not a CCAA school`,
     );
@@ -140,51 +182,71 @@ async function processPlayer(
   linkResolver: LinkResolver,
   includeFgPct: boolean,
   seasonCache?: CachedPlayerSeasons | null,
-): Promise<{ ok: boolean; linked: boolean; seasonRows: number; playerId?: number; skipped?: boolean }> {
+): Promise<{
+  ok: boolean;
+  linked: boolean;
+  seasonRows: number;
+  playerId?: number;
+  skipped?: boolean;
+  cacheUpdated?: boolean;
+}> {
   const displayName = cacheEntry?.displayName ?? `Player-${playerId}`;
   let indexSeasons = cacheEntry?.seasons ?? [];
+  let profileSeasons: NcaaSeasonRow[] = [];
+  let cacheUpdated = false;
 
   let bio: NcaaPlayerBio;
   let mergedSeasons = mergeSeasonRows(indexSeasons);
 
-  if (options.backfill && cacheEntry) {
+  const useIndexOnly =
+    options.backfill && cacheEntry && seasonsHaveRealStats(indexSeasons);
+
+  if (useIndexOnly) {
+    bio = syntheticBio(playerId, cacheEntry!.displayName, cacheEntry!.position);
+    console.log(
+      `[cache] ${bio.displayName}: ${mergedSeasons.length} season(s) from index` +
+        ` [${formatSeasonLabels(mergedSeasons)}]`,
+    );
+  } else {
     const html = await fetchPlayerHtml(client, options, playerId, displayName);
 
     bio = parsePlayerBioFromHtml(
       html,
       playerId,
-      cacheEntry.displayName,
-      cacheEntry.position ?? null,
+      cacheEntry?.displayName,
+      cacheEntry?.position ?? null,
     );
 
-    const profileSeasons = await collectAllNcaaSeasons(client, playerId, html);
+    profileSeasons = await collectAllNcaaSeasons(client, playerId, html);
     mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
 
-    if (mergedSeasons.length === 0) {
-      if (options.backfill) {
-        const hit = await lookupFirstIndexSeasonForPlayer(client, playerId);
-        if (hit) {
-          indexSeasons = [hit.season];
-          console.log(
-            `[index] ${playerId}: roster ${hit.season.seasonLabel} @ ${hit.season.teamName}`,
-          );
-        }
-      } else {
-        indexSeasons = await fetchIndexSeasonsForPlayer(client, playerId);
-        if (indexSeasons.length) {
-          console.log(`[index] ${playerId}: found ${indexSeasons.length} roster season(s) on index`);
-        }
+    if (mergedSeasons.length === 0 && options.backfill && indexSeasons.length === 0) {
+      const hit = await lookupFirstIndexSeasonForPlayer(client, playerId);
+      if (hit) {
+        indexSeasons = [hit.season];
+        mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
+        cacheUpdated = true;
+        console.log(
+          `[index] ${playerId}: roster ${hit.season.seasonLabel} @ ${hit.season.teamName}`,
+        );
       }
-      mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
     }
 
-    if (seasonCache && options.seasonCachePath) {
+    if (mergedSeasons.length === 0 && !options.backfill && indexSeasons.length === 0) {
+      indexSeasons = await fetchIndexSeasonsForPlayer(client, playerId);
+      mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
+      if (indexSeasons.length) {
+        console.log(`[index] ${playerId}: found ${indexSeasons.length} season(s) on index`);
+      }
+    }
+
+    if (seasonCache) {
       seasonCache.players[playerId] = {
         displayName: bio.displayName,
         position: bio.position,
         seasons: mergedSeasons,
       };
-      saveSeasonCache(options.seasonCachePath, seasonCache);
+      cacheUpdated = true;
     }
 
     if (mergedSeasons.length > 0) {
@@ -199,52 +261,18 @@ async function processPlayer(
           ` [${formatSeasonLabels(mergedSeasons)}]`,
       );
     }
-  } else {
-    const html = await fetchPlayerHtml(client, options, playerId, displayName);
-
-    bio = parsePlayerBioFromHtml(
-      html,
-      playerId,
-      cacheEntry?.displayName,
-      cacheEntry?.position ?? null,
-    );
-
-    const profileSeasons = await collectAllNcaaSeasons(client, playerId, html);
-    mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
-
-    // During backfill, discovery already scanned every season index — never re-fetch all 20.
-    if (mergedSeasons.length === 0 && !options.backfill) {
-      console.log(`[index] ${playerId}: no NCAA seasons on profile — scanning season indexes...`);
-      indexSeasons = await fetchIndexSeasonsForPlayer(client, playerId);
-      mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
-      if (indexSeasons.length) {
-        console.log(`[index] ${playerId}: found ${indexSeasons.length} season(s) on index`);
-      }
-    } else if (profileSeasons.length > indexSeasons.length) {
-      console.log(
-        `[profile] ${bio.displayName} (${playerId}): ${indexSeasons.length} index + ` +
-          `${profileSeasons.length} profile → ${mergedSeasons.length} merged` +
-          (mergedSeasons.length ? ` [${formatSeasonLabels(mergedSeasons)}]` : ""),
-      );
-    } else if (mergedSeasons.length > 0) {
-      console.log(
-        `[player] ${bio.displayName}: ${mergedSeasons.length} season(s)` +
-          ` [${formatSeasonLabels(mergedSeasons)}]`,
-      );
-    }
   }
 
   mergedSeasons = filterUsportsSeasonRows(mergedSeasons, playerId, bio.displayName);
   mergedSeasons = mergeSeasonRows(mergedSeasons);
 
-  if (seasonCache && options.seasonCachePath && seasonCache.players[playerId]) {
+  if (seasonCache?.players[playerId] && cacheUpdated) {
     seasonCache.players[playerId].seasons = mergedSeasons;
-    saveSeasonCache(options.seasonCachePath, seasonCache);
   }
 
   if (mergedSeasons.length === 0) {
     console.log(`[skip] ${playerId} ${bio.displayName}: no CCAA seasons`);
-    return { ok: true, linked: false, seasonRows: 0, skipped: true };
+    return { ok: true, linked: false, seasonRows: 0, skipped: true, cacheUpdated };
   }
 
   const resolvedName = resolveDisplayName(cacheEntry?.displayName, bio.displayName);
@@ -325,6 +353,7 @@ async function processPlayer(
     linked,
     seasonRows: seasonResult.seasonRows,
     playerId: seasonResult.playerId ?? hoopPlayerId,
+    cacheUpdated,
   };
 }
 
@@ -361,7 +390,64 @@ export async function runScrape(
   let seasonCache = loadSeasonCache(options.seasonCachePath);
   let slugs: string[];
 
-  if (options.playerSlug) {
+  const shouldRediscover =
+    options.rediscover ||
+    (options.backfill &&
+      seasonCache &&
+      seasonCacheNeedsRediscovery(seasonCache) &&
+      (options.shardCount === 1 || options.shardIndex === 0));
+
+  if (options.discoverOnly || shouldRediscover) {
+    if (options.shardCount > 1 && options.shardIndex !== 0 && !options.discoverOnly) {
+      throw new Error(
+        `Shard ${shardLabel(options.shardIndex, options.shardCount)}: season cache is stale. ` +
+          "Run discovery on shard 0/4 first (--discover-only --shard 0/4), then restart all shards.",
+      );
+    }
+    if (seasonCache && !options.rediscover) {
+      const stats = countSeasonCacheStats(seasonCache);
+      console.log(
+        `[index] Season cache looks stale (${stats.withSeasons}/${stats.players} with index rows). ` +
+          "Re-running discovery...",
+      );
+    } else if (options.rediscover) {
+      console.log("[index] Re-running discovery (--rediscover)...");
+    }
+    try {
+      const discovered = await discoverAllPlayers(client);
+      seasonCache = discovered.cache;
+      slugs = discovered.slugs;
+      saveSeasonCache(options.seasonCachePath || DEFAULT_SEASON_CACHE, seasonCache);
+      saveSlugCache(options.slugCachePath, slugs);
+      checkpoint = saveCheckpointSlugs(checkpoint, slugs, options.checkpointPath);
+      const stats = countSeasonCacheStats(seasonCache);
+      console.log(
+        `[index] Cache ready: ${stats.players} players, ${stats.withSeasons} with index rows, ` +
+          `${stats.withStats} with index stats`,
+      );
+    } catch (error) {
+      if (error instanceof UsbasketRateLimitError) {
+        console.error("");
+        console.error("Stopping — usbasket rate limit reached during index crawl.");
+        console.error("Wait 1–2 hours, then rerun with --resume.");
+        throw error;
+      }
+      throw error;
+    }
+
+    if (options.discoverOnly) {
+      return {
+        summary: {
+          processed: 0,
+          succeeded: 0,
+          failed: 0,
+          skipped: 0,
+          linked: 0,
+          seasonRows: 0,
+        },
+      };
+    }
+  } else if (options.playerSlug) {
     if (
       options.shardCount > 1 &&
       !playerBelongsToShard(options.playerSlug, options.shardIndex, options.shardCount)
@@ -423,6 +509,10 @@ export async function runScrape(
   const ordered =
     options.backfill && seasonCache
       ? [...pending].sort((a, b) => {
+          const priorityDiff =
+            playerQueuePriority(a, seasonCache) - playerQueuePriority(b, seasonCache);
+          if (priorityDiff !== 0) return priorityDiff;
+
           const aSeasons = seasonCache!.players[a]?.seasons.length ?? 0;
           const bSeasons = seasonCache!.players[b]?.seasons.length ?? 0;
           if (bSeasons !== aSeasons) return bSeasons - aSeasons;
@@ -476,6 +566,8 @@ export async function runScrape(
       ` · ${slugs.length} total in index · ${shardSlugs.length - pending.length} already done ===\n`,
   );
 
+  let cacheSaveCounter = 0;
+
   for (const playerId of toProcess) {
     summary.processed += 1;
     const cacheEntry = seasonCache?.players[playerId];
@@ -500,7 +592,7 @@ export async function runScrape(
       if (result.ok) {
         summary.succeeded += 1;
         summary.seasonRows += result.seasonRows;
-        if (!options.dryRun && result.seasonRows > 0) {
+        if (!options.dryRun && (result.seasonRows > 0 || result.skipped)) {
           markSlugComplete(checkpoint, playerId, options.checkpointPath);
         }
       } else {
@@ -508,6 +600,14 @@ export async function runScrape(
         appendLog(options.logPath, `FAIL ${playerId}`);
       }
       if (result.linked) summary.linked += 1;
+
+      if (result.cacheUpdated && seasonCache && options.seasonCachePath) {
+        cacheSaveCounter += 1;
+        if (cacheSaveCounter >= SEASON_CACHE_SAVE_EVERY) {
+          saveSeasonCache(options.seasonCachePath, seasonCache);
+          cacheSaveCounter = 0;
+        }
+      }
     } catch (error) {
       summary.failed += 1;
       const message = error instanceof Error ? error.message : String(error);
@@ -521,6 +621,10 @@ export async function runScrape(
         break;
       }
     }
+  }
+
+  if (cacheSaveCounter > 0 && seasonCache && options.seasonCachePath) {
+    saveSeasonCache(options.seasonCachePath, seasonCache);
   }
 
   return { summary };

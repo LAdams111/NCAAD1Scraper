@@ -13,6 +13,7 @@ import {
   indexRowToSeasonRow,
   mergeSeasonRows,
   parseSeasonRowsFromIndexData,
+  seasonsHaveRealStats,
 } from "./playerSeason.js";
 import { formatDisplayName, normalizeSeasonLabel } from "../utils/season.js";
 
@@ -149,12 +150,33 @@ export async function discoverAllPlayers(
   const slugs = Object.keys(cache.players).sort();
   const withStats = slugs.filter((id) => (cache.players[id]?.seasons.length ?? 0) > 0).length;
   console.log(
-    `[index] Discovery complete: ${slugs.length} unique players (${withStats} with index stats)`,
+    `[index] Discovery complete: ${slugs.length} unique players (${withStats} with index season rows)`,
   );
   return { cache, slugs };
 }
 
-/** Find a player's name on the index (newest seasons first). */
+export function seasonCacheNeedsRediscovery(cache: CachedPlayerSeasons): boolean {
+  const total = Object.keys(cache.players).length;
+  if (total === 0) return true;
+  const withSeasons = Object.values(cache.players).filter((entry) => entry.seasons.length > 0).length;
+  // CCAA strData only exists on recent index years; any cached rows means discovery already ran.
+  return withSeasons === 0;
+}
+
+export function countSeasonCacheStats(cache: CachedPlayerSeasons): {
+  players: number;
+  withSeasons: number;
+  withStats: number;
+} {
+  const players = Object.keys(cache.players).length;
+  let withSeasons = 0;
+  let withStats = 0;
+  for (const entry of Object.values(cache.players)) {
+    if (entry.seasons.length > 0) withSeasons += 1;
+    if (seasonsHaveRealStats(entry.seasons)) withStats += 1;
+  }
+  return { players, withSeasons, withStats };
+}
 export async function lookupPlayerMetaFromIndex(
   client: UsbasketClient,
   playerId: string,
