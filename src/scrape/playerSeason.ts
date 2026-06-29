@@ -549,6 +549,112 @@ function parseCareerStatNumber(text: string, pattern: RegExp): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+interface CareerLineMeta {
+  teamName: string;
+  leagueText: string;
+  statsText: string;
+}
+
+function normalizeCareerLineBody(body: string): string {
+  return body.replace(/^\$[\d,]+:\s*/i, "").trim();
+}
+
+function inferCareerLeagueFromParens(parenGroups: string[], teamName: string): string {
+  for (const group of parenGroups) {
+    if (/preparatory|prep school|high school|\bhs\b/i.test(group)) {
+      return "High School";
+    }
+    if (/uaa|aau|u17|u16|u15/i.test(group)) {
+      return "AAU";
+    }
+    if (/ncaa|nba|g-?league|juco|naia|ccaa|u-?sports|cis/i.test(group)) {
+      return group;
+    }
+  }
+  if (/preparatory|prep school|high school|\bhs\b/i.test(teamName)) {
+    return "High School";
+  }
+  return parenGroups[0] ?? "Unknown";
+}
+
+function inferCareerLeagueFromLocation(teamName: string, locationPrefix: string): string {
+  if (/preparatory|prep school|high school|\bhs\b/i.test(teamName)) {
+    return "High School";
+  }
+  const stateMatch = /,\s*([A-Z]{2})\b/.exec(locationPrefix);
+  if (stateMatch) return stateMatch[1];
+  return "High School";
+}
+
+/** USBasket career lines use several formats — not only `Team (League): stats`. */
+function parseCareerLineMeta(body: string): CareerLineMeta | null {
+  const trimmed = body.replace(/&quote;/g, "'").trim();
+  const colonIdx = trimmed.indexOf(":");
+  if (colonIdx < 0) {
+    const parenOnly = /^(.+?)\(([^)]+)\)\s*$/i.exec(trimmed);
+    if (!parenOnly) return null;
+    return {
+      teamName: parenOnly[1].trim(),
+      leagueText: parenOnly[2].trim(),
+      statsText: "",
+    };
+  }
+
+  const head = trimmed.slice(0, colonIdx).trim();
+  const statsText = trimmed.slice(colonIdx + 1).trim();
+  if (!head) return null;
+
+  if (head.includes("/")) {
+    const segments = head.split("/").map((part) => part.trim()).filter(Boolean);
+    const teamName = segments[segments.length - 1] ?? head;
+    const leagueText = inferCareerLeagueFromLocation(teamName, segments.slice(0, -1).join(" / "));
+    return { teamName, leagueText, statsText };
+  }
+
+  const parenGroups = [...head.matchAll(/\(([^)]+)\)/g)].map((match) => match[1].trim());
+  const teamName = head.replace(/\([^)]+\)/g, " ").replace(/\s+/g, " ").trim();
+  if (!teamName) return null;
+
+  return {
+    teamName,
+    leagueText: inferCareerLeagueFromParens(parenGroups, teamName),
+    statsText,
+  };
+}
+
+function buildCareerSeasonRow(
+  seasonLabel: string,
+  meta: CareerLineMeta,
+): Omit<CareerSeasonRow, "leagueText"> {
+  const { teamName, statsText } = meta;
+  const pointsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i);
+  const reboundsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i);
+  const assistsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i);
+
+  return {
+    seasonLabel,
+    teamName,
+    teamAbbreviation: teamAbbreviation(teamName),
+    gamesPlayed: parseCareerGamesPlayed(statsText),
+    pointsPerGame: round1(pointsPerGame ?? 0),
+    reboundsPerGame: round1(reboundsPerGame ?? 0),
+    assistsPerGame: round1(assistsPerGame ?? 0),
+    stealsPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*spg/i) ?? 0),
+    blocksPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*bpg/i) ?? 0),
+    fieldGoalPct: parseCareerPct(statsText, [/FGP:?\s*([\d.]+)%/i, /FG:\s*([\d.]+)%/i]),
+    threePointPct: parseCareerPct(statsText, [/3FGP:?\s*([\d.]+)%/i, /3PT:?\s*([\d.]+)%/i, /3Pt:?\s*([\d.]+)%/i]),
+    freeThrowPct: parseCareerPct(statsText, [/FTP:?\s*([\d.]+)%/i, /FT:?\s*([\d.]+)%/i]),
+  };
+}
+
+function careerLineHasAnyStat(statsText: string): boolean {
+  return (
+    parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i) != null ||
+    parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i) != null ||
+    parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i) != null
+  );
+}
+
 function parseCareerPct(text: string, patterns: RegExp[]): number | null {
   for (const pattern of patterns) {
     const match = pattern.exec(text);
@@ -606,44 +712,16 @@ export function parseCareerYearByYearSeasons(
     const seasonLabel = careerSeasonLabel(match[1]);
     if (!seasonLabel) continue;
 
-    const body = stripHtmlText(truncateCareerLineHtml(match[2]));
-    const metaMatch = /^(.+?)\(([^)]+)\)/i.exec(body);
-    if (!metaMatch) continue;
+    const body = normalizeCareerLineBody(stripHtmlText(truncateCareerLineHtml(match[2])));
+    const meta = parseCareerLineMeta(body);
+    if (!meta || !meta.teamName || !leagueTagMatchesCareerLeague(meta.leagueText, leagueTag)) continue;
 
-    const teamName = metaMatch[1].replace(/&quote;/g, "'").trim();
-    const leagueText = metaMatch[2].trim();
-    const statsText = body.slice(metaMatch[0].length).replace(/^:\s*/, "").trim();
-    if (!teamName || !leagueTagMatchesCareerLeague(leagueText, leagueTag)) continue;
-
-    const pointsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i);
-    const reboundsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i);
-    const assistsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i);
-
-    if (
-      pointsPerGame == null ||
-      reboundsPerGame == null ||
-      assistsPerGame == null
-    ) {
-      rows.push(createZeroStatSeasonRow(teamName, seasonLabel));
+    if (!careerLineHasAnyStat(meta.statsText)) {
+      rows.push(createZeroStatSeasonRow(meta.teamName, seasonLabel));
       continue;
     }
 
-    const gamesPlayed = parseCareerGamesPlayed(statsText);
-
-    rows.push({
-      seasonLabel,
-      teamName,
-      teamAbbreviation: teamAbbreviation(teamName),
-      gamesPlayed,
-      pointsPerGame: round1(pointsPerGame),
-      reboundsPerGame: round1(reboundsPerGame),
-      assistsPerGame: round1(assistsPerGame),
-      stealsPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*spg/i) ?? 0),
-      blocksPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*bpg/i) ?? 0),
-      fieldGoalPct: parseCareerPct(statsText, [/FGP:?\s*([\d.]+)%/i, /FG:\s*([\d.]+)%/i]),
-      threePointPct: parseCareerPct(statsText, [/3FGP:?\s*([\d.]+)%/i, /3PT:?\s*([\d.]+)%/i, /3Pt:?\s*([\d.]+)%/i]),
-      freeThrowPct: parseCareerPct(statsText, [/FTP:?\s*([\d.]+)%/i, /FT:?\s*([\d.]+)%/i]),
-    });
+    rows.push(buildCareerSeasonRow(seasonLabel, meta));
   }
 
   return dedupeSeasonRows(rows);
@@ -669,45 +747,16 @@ export function parseAllCareerYearByYearSeasons(html: string): CareerSeasonRow[]
     const seasonLabel = careerSeasonLabel(match[1]);
     if (!seasonLabel) continue;
 
-    const body = stripHtmlText(truncateCareerLineHtml(match[2]));
-    const metaMatch = /^(.+?)\(([^)]+)\)/i.exec(body);
-    if (!metaMatch) continue;
+    const body = normalizeCareerLineBody(stripHtmlText(truncateCareerLineHtml(match[2])));
+    const meta = parseCareerLineMeta(body);
+    if (!meta || !meta.teamName || !meta.leagueText) continue;
 
-    const teamName = metaMatch[1].replace(/&quote;/g, "'").trim();
-    const leagueText = metaMatch[2].trim();
-    const statsText = body.slice(metaMatch[0].length).replace(/^:\s*/, "").trim();
-    if (!teamName || !leagueText) continue;
-
-    const pointsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i);
-    const reboundsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i);
-    const assistsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i);
-
-    if (
-      pointsPerGame == null ||
-      reboundsPerGame == null ||
-      assistsPerGame == null
-    ) {
-      rows.push({ ...createZeroStatSeasonRow(teamName, seasonLabel), leagueText });
+    if (!careerLineHasAnyStat(meta.statsText)) {
+      rows.push({ ...createZeroStatSeasonRow(meta.teamName, seasonLabel), leagueText: meta.leagueText });
       continue;
     }
 
-    const gamesPlayed = parseCareerGamesPlayed(statsText);
-
-    rows.push({
-      seasonLabel,
-      teamName,
-      teamAbbreviation: teamAbbreviation(teamName),
-      gamesPlayed,
-      pointsPerGame: round1(pointsPerGame),
-      reboundsPerGame: round1(reboundsPerGame),
-      assistsPerGame: round1(assistsPerGame),
-      stealsPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*spg/i) ?? 0),
-      blocksPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*bpg/i) ?? 0),
-      fieldGoalPct: parseCareerPct(statsText, [/FGP:?\s*([\d.]+)%/i, /FG:\s*([\d.]+)%/i]),
-      threePointPct: parseCareerPct(statsText, [/3FGP:?\s*([\d.]+)%/i, /3PT:?\s*([\d.]+)%/i, /3Pt:?\s*([\d.]+)%/i]),
-      freeThrowPct: parseCareerPct(statsText, [/FTP:?\s*([\d.]+)%/i, /FT:?\s*([\d.]+)%/i]),
-      leagueText,
-    });
+    rows.push({ ...buildCareerSeasonRow(seasonLabel, meta), leagueText: meta.leagueText });
   }
 
   return dedupeCareerSeasonRows(rows);

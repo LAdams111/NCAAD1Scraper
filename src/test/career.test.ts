@@ -70,4 +70,27 @@ describe("career profile parsing", () => {
     const seasons = parseAllCareerYearByYearSeasons(html);
     assert.equal(seasons[0]?.gamesPlayed, 71);
   });
+
+  it("parses high school slash-format career lines without league parentheses", () => {
+    const html =
+      "Year-By-Year Career <b>2018-2019:</b> Atlanta, GA / Holy Spirit Preparatory School: 29ppg, 9rpg profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.seasonLabel, "2018-19");
+    assert.equal(seasons[0]?.teamName, "Holy Spirit Preparatory School");
+    assert.equal(seasons[0]?.leagueText, "High School");
+    assert.equal(seasons[0]?.pointsPerGame, 29);
+    assert.equal(seasons[0]?.reboundsPerGame, 9);
+    assert.equal(seasons[0]?.assistsPerGame, 0);
+  });
+
+  it("parses AAU career lines without assists per game", () => {
+    const html =
+      "Year-By-Year Career <b>2018:</b> Atlanta XPress (GA) (UAA U17): 21ppg, 6.1rpg profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.teamName, "Atlanta XPress");
+    assert.equal(seasons[0]?.pointsPerGame, 21);
+    assert.equal(seasons[0]?.reboundsPerGame, 6.1);
+  });
 });
