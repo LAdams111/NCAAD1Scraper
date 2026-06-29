@@ -212,6 +212,27 @@ export function buildBioPayload(
   };
 }
 
+/** Full scraped bio for usbasket/eurobasket-only players (no authoritative HC profile yet). */
+export function buildCareerBioPayload(
+  bio: NcaaPlayerBio,
+  linkTo?: LinkTarget,
+  source: string = NCAA_SOURCE,
+) {
+  return {
+    source,
+    externalId: bio.playerId,
+    player: {
+      displayName: bio.displayName,
+      birthDate: bio.birthDate,
+      position: bio.position,
+      heightCm: bio.heightCm,
+      weightKg: bio.weightKg,
+      hometown: bio.hometown,
+    },
+    ...(linkTo ? { linkTo } : {}),
+  };
+}
+
 /** @deprecated Use buildNameLookup */
 export const buildBdlLookup = buildNameLookup;
 

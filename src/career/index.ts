@@ -23,8 +23,8 @@ Prerequisites:
 
 Options:
   --backfill             Process players from global ID cache (required)
-  --enrich-existing      Only ingest when player matches an existing HC identity
-  --create-new           Allow creating new HC players (default unless --enrich-existing)
+  --enrich-existing      Skip players with no existing HC match (unless --create-new)
+  --create-new           Create HC players when no match (default for career:backfill)
   --include-authoritative  Ingest NBA/G League lines from usbasket (default: skip)
   --dry-run              Log payloads without POSTing
   --resume               Skip player IDs in checkpoint (default with --backfill)
@@ -38,8 +38,9 @@ Options:
   --help                 Show this help
 
 Examples:
-  npm run career:dry-run -- --player-slug 2544
-  npm run career:backfill -- --enrich-existing --resume --limit 10
+  npm run career:dry-run -- --player-slug 66630
+  npm run career:backfill -- --player-slug 66630 --fresh
+  npm run career:enrich -- --resume --limit 10
   npm run career:backfill -- --shard 0/4 --resume
 `);
 }
@@ -184,6 +185,12 @@ async function main(): Promise<void> {
   console.log("CareerHub backfill");
   console.log(`Target: ${config.hoopCentralApiUrl}`);
   console.log(`Mode: ${args.dryRun ? "dry-run" : "live ingest"}`);
+  const ingestMode = args.enrichExisting
+    ? args.createNewPlayers
+      ? "enrich-existing + create-new"
+      : "enrich-existing only"
+    : "create-new (link to BDL when matched)";
+  console.log(`Ingest: ${ingestMode}`);
   if (args.shardCount > 1) {
     console.log(`Shard: ${shardLabel(args.shardIndex, args.shardCount)}`);
   }

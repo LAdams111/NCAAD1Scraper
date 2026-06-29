@@ -74,6 +74,14 @@ function isLnbU21Tag(leagueText: string): boolean {
   return tagIncludes(leagueText, ["LNB U21", "LNB YOUTH"]) || /\bU21\b/i.test(leagueText);
 }
 
+/** Spanish top division — USBasket uses ACB, Liga Endesa, and Spain-Liga Endesa interchangeably. */
+function isLigaAcbTag(leagueText: string): boolean {
+  if (tagIncludes(leagueText, ["ESP-1", "ACB", "LIGA ACB"])) return true;
+  if (/\bLIGA\s+ENDESA\b/i.test(leagueText)) return true;
+  if (/\bSPAIN[\s-]*LIGA\s+ENDESA\b/i.test(leagueText)) return true;
+  return false;
+}
+
 /** Map usbasket Year-By-Year league tags to Hoop Central leagues. */
 export function routeLeagueTag(
   leagueText: string,
@@ -222,7 +230,7 @@ export function routeLeagueTag(
     };
   }
 
-  if (tagIncludes(leagueText, ["ESP-1", "ACB", "LIGA ACB"])) {
+  if (isLigaAcbTag(leagueText)) {
     return {
       source: "usbasket-profile",
       leagueSlug: "acb",

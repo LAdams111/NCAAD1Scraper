@@ -2,6 +2,7 @@ import type { CareerPlayerSeasonRecord, CareerSeasonRow, HoopCentralIngestPayloa
 import { CAREER_SOURCE } from "../types.js";
 import { isCareerTransactionSeason } from "../scrape/playerSeason.js";
 import { normalizeCareerTeam, routeLeagueTag } from "./leagueRoutes.js";
+import { applyCanonicalLeagueRoute } from "./canonicalLeagues.js";
 
 export function buildCareerSeasonRecords(
   playerId: string,
@@ -21,7 +22,7 @@ export function buildCareerSeasonRecords(
       continue;
     }
 
-    const route = routeLeagueTag(season.leagueText, options);
+    const route = applyCanonicalLeagueRoute(routeLeagueTag(season.leagueText, options));
     if (route.skip) {
       skipped += 1;
       continue;

@@ -48,6 +48,25 @@ describe("career league routing", () => {
     assert.equal(routeLeagueTag("LNB U21").leagueSlug, "lnb-u21");
   });
 
+  it("routes Spanish ACB tag variants to a canonical league", () => {
+    assert.equal(routeLeagueTag("Liga ACB").leagueSlug, "acb");
+    assert.equal(routeLeagueTag("Liga Endesa").leagueSlug, "acb");
+    assert.equal(routeLeagueTag("Spain-Liga Endesa").leagueSlug, "acb");
+    assert.equal(routeLeagueTag("Spain-Liga Endesa, starting five").leagueSlug, "acb");
+  });
+
+  it("maps deprecated auto-slugs to canonical leagues before ingest", async () => {
+    const { applyCanonicalLeagueRoute } = await import("../career/canonicalLeagues.js");
+    const route = applyCanonicalLeagueRoute({
+      source: "usbasket-profile",
+      leagueSlug: "spain-liga-endesa",
+      leagueName: "Spain-Liga Endesa",
+      skip: false,
+    });
+    assert.equal(route.leagueSlug, "acb");
+    assert.equal(route.leagueName, "Liga ACB");
+  });
+
   it("normalizes team slugs consistently for the same school", () => {
     const a = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
     const b = normalizeCareerTeam("St. Vincent-St. Mary", "high-school");
@@ -152,7 +171,35 @@ describe("career profile parsing", () => {
       "Year-By-Year Career <b>2024-2025:</b> in Feb.'25 signed at Los Angeles Lakers (NBA): 33 games: 28.5ppg profile-head";
     const seasons = parseAllCareerYearByYearSeasons(html);
     assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.teamName, "Los Angeles Lakers");
     assert.equal(seasons[0]?.gamesPlayed, 33);
     assert.equal(seasons[0]?.pointsPerGame, 28.5);
+  });
+
+  it("extracts team from signed-at lines with stats instead of keeping transaction text", () => {
+    const html =
+      "Year-By-Year Career <b>2023-2024:</b> in Feb.'24 signed at KK Crvena zvezda Meridianbet Beograd (Serbia-KLS): 28 games: 12.1ppg profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.teamName, "KK Crvena zvezda Meridianbet Beograd");
+    assert.equal(seasons[0]?.leagueText, "Serbia-KLS");
+    assert.equal(seasons[0]?.gamesPlayed, 28);
+  });
+
+  it("skips missed-season and signed-at narrative lines without stats", () => {
+    const html =
+      "Year-By-Year Career <b>2017-2018:</b> missed most of season, in April '18 signed at Real Madrid (Liga Endesa) profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 0);
+  });
+
+  it("dedupes narrative and real stints for the same season", () => {
+    const html =
+      "Year-By-Year Career <b>2017-2018:</b> missed most of season, in April '18 signed at Real Madrid (Liga Endesa)<br/>" +
+      "<b>2017-2018:</b> Real Madrid (Liga Endesa): 12 games: 6.9ppg profile-head";
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 1);
+    assert.equal(seasons[0]?.teamName, "Real Madrid");
+    assert.equal(seasons[0]?.gamesPlayed, 12);
   });
 });

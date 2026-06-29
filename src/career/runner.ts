@@ -7,7 +7,7 @@ import {
 } from "../scrape/checkpoint.js";
 import { loadShardCheckpoint } from "../utils/shard.js";
 import {
-  buildBioPayload,
+  buildCareerBioPayload,
   createLinkResolver,
   type LinkResolver,
 } from "../scrape/linking.js";
@@ -132,6 +132,7 @@ async function processCareerPlayer(
   skippedRoutes: number;
   skipped?: boolean;
   playerId?: number;
+  created?: boolean;
 }> {
   const html = await fetchProfileHtml(client, options, playerId, displayName);
   const bio: NcaaPlayerBio = parsePlayerBioFromHtml(html, playerId, displayName, null);
@@ -194,15 +195,21 @@ async function processCareerPlayer(
   }
 
   const playerFields = { displayName: bio.displayName };
-  const linkPayload = buildBioPayload(bio, linkTarget ?? undefined, CAREER_SOURCE);
+  const linkPayload = buildCareerBioPayload(bio, linkTarget ?? undefined, CAREER_SOURCE);
 
   let linked = false;
+  let created = false;
   let hoopPlayerId: number | undefined;
 
   if (options.dryRun) {
     if (linkTarget) {
       console.log(
         `[dry-run] would link ${playerId} → ${linkTarget.source}:${linkTarget.externalId}`,
+      );
+    } else {
+      console.log(
+        `[dry-run] would create ${bio.displayName} on HC` +
+          (bio.birthDate ? ` (DOB ${bio.birthDate})` : ""),
       );
     }
     console.log(`[dry-run] would ingest ${records.length} season(s)`);
@@ -214,13 +221,15 @@ async function processCareerPlayer(
       bioResult.linkedVia === "linkTo" ||
       bioResult.linkedVia === "fuzzy" ||
       bioResult.linkedVia === "identity";
+    created = bioResult.linkedVia === "created" || bioResult.created.player;
 
     if (linkTarget) {
       linkResolver.rememberLink(playerId, linkTarget);
     }
 
+    const action = created ? "create" : "link";
     console.log(
-      `[link] ${playerId} ${bio.displayName} → playerId=${bioResult.playerId} (${bioResult.linkedVia})`,
+      `[${action}] ${playerId} ${bio.displayName} → playerId=${bioResult.playerId} (${bioResult.linkedVia})`,
     );
   }
 
@@ -248,6 +257,7 @@ async function processCareerPlayer(
   return {
     ok: seasonResult.ok,
     linked,
+    created,
     seasonRows: seasonResult.seasonRows,
     routedSeasons: records.length,
     skippedRoutes: skipped,
@@ -318,10 +328,17 @@ export async function runCareerBackfill(
     failed: 0,
     skipped: shardIds.length - pending.length,
     linked: 0,
+    created: 0,
     seasonRows: 0,
     routedSeasons: 0,
     skippedRoutes: 0,
   };
+
+  const modeLabel = options.enrichExisting
+    ? options.createNewPlayers
+      ? " · enrich-existing + create-new"
+      : " · enrich-existing only"
+    : " · create-new (default)";
 
   console.log(
     `\n=== Career backfill === ${toProcess.length} to process` +
@@ -330,7 +347,7 @@ export async function runCareerBackfill(
         ? ` · shard ${shardLabel(options.shardIndex, options.shardCount)} (${shardIds.length} in shard)`
         : "") +
       ` · ${allIds.length} total IDs · ${shardIds.length - pending.length} already done` +
-      (options.enrichExisting ? " · enrich-existing" : "") +
+      modeLabel +
       `\n`,
   );
 
@@ -364,6 +381,7 @@ export async function runCareerBackfill(
         appendLog(logPath, `FAIL ${playerId}`);
       }
       if (result.linked) summary.linked += 1;
+      if (result.created) summary.created += 1;
     } catch (error) {
       summary.failed += 1;
       const message = error instanceof Error ? error.message : String(error);
@@ -390,6 +408,7 @@ export function printCareerSummary(summary: CareerBackfillSummary, dryRun: boole
   console.log(`Failed:         ${summary.failed}`);
   console.log(`Skipped:        ${summary.skipped} (checkpoint / no match / no data)`);
   console.log(`Linked:         ${summary.linked}`);
+  console.log(`Created:        ${summary.created}`);
   console.log(`Season rows:    ${summary.seasonRows}`);
   console.log(`Routed seasons: ${summary.routedSeasons}`);
   console.log(`Skipped routes: ${summary.skippedRoutes} (NBA/G League authoritative skips)`);

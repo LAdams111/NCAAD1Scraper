@@ -269,6 +269,7 @@ export interface CareerBackfillOptions {
 export interface CareerBackfillSummary extends ScrapeSummary {
   routedSeasons: number;
   skippedRoutes: number;
+  created: number;
 }
 
 export interface CachedPlayerSeasons {

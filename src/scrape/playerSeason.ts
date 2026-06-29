@@ -592,6 +592,34 @@ function inferCareerLeagueFromLocation(teamName: string, locationPrefix: string)
   return "High School";
 }
 
+/** Strip date clauses and extract the team from "signed at …" transaction phrasing. */
+function stripCareerTransactionPrefix(head: string): string {
+  let text = head.replace(/&quote;/g, "'").trim();
+
+  const signedAt = /\bsigned\s+at\s+(.+)$/i.exec(text);
+  if (signedAt) {
+    text = signedAt[1].trim();
+  } else {
+    text = text.replace(/^(?:in|on)\s+[A-Za-z]{3,9}\.?'?\s*\d{0,2},?\s*/i, "");
+    text = text.replace(/^missed\s+most\s+of\s+(?:the\s+)?season[^,]*,?\s*/i, "");
+  }
+
+  return text.trim();
+}
+
+function isNarrativeCareerTeamName(teamName: string): boolean {
+  const trimmed = teamName.trim();
+  if (!trimmed) return true;
+
+  const lower = trimmed.toLowerCase();
+  if (/^(in|on)\s+\w/.test(lower)) return true;
+  if (/\bsigned at\b/.test(lower)) return true;
+  if (/\bmissed (most of )?(the )?season\b/.test(lower)) return true;
+  if (/^(drafted|traded|released|waived|acquired|declared)\b/.test(lower)) return true;
+  if (/\b(traded to|drafted by|declared for|entered the draft)\b/.test(lower)) return true;
+  return false;
+}
+
 /** USBasket career lines use several formats — not only `Team (League): stats`. */
 function parseCareerLineMeta(body: string): CareerLineMeta | null {
   const trimmed = body.replace(/&quote;/g, "'").trim();
@@ -599,16 +627,26 @@ function parseCareerLineMeta(body: string): CareerLineMeta | null {
   if (colonIdx < 0) {
     const parenOnly = /^(.+?)\(([^)]+)\)\s*$/i.exec(trimmed);
     if (!parenOnly) return null;
+    const rawHead = parenOnly[1].trim();
+    if (
+      /\b(?:missed (most of )?(the )?season|signed at|due to (an )?injury|released in|waived in)\b/i.test(
+        `${rawHead} ${parenOnly[2]}`,
+      )
+    ) {
+      return null;
+    }
+    const teamName = stripCareerTransactionPrefix(rawHead);
+    if (!teamName || isNarrativeCareerTeamName(teamName)) return null;
     return {
-      teamName: parenOnly[1].trim(),
+      teamName,
       leagueText: parenOnly[2].trim(),
       statsText: "",
     };
   }
 
-  const head = trimmed.slice(0, colonIdx).trim();
+  const head = stripCareerTransactionPrefix(trimmed.slice(0, colonIdx).trim());
   const statsText = trimmed.slice(colonIdx + 1).trim();
-  if (!head) return null;
+  if (!head || isNarrativeCareerTeamName(head)) return null;
 
   if (head.includes("/")) {
     const segments = head.split("/").map((part) => part.trim()).filter(Boolean);
@@ -619,7 +657,7 @@ function parseCareerLineMeta(body: string): CareerLineMeta | null {
 
   const parenGroups = [...head.matchAll(/\(([^)]+)\)/g)].map((match) => match[1].trim());
   const teamName = head.replace(/\([^)]+\)/g, " ").replace(/\s+/g, " ").trim();
-  if (!teamName) return null;
+  if (!teamName || isNarrativeCareerTeamName(teamName)) return null;
 
   let leagueText = inferCareerLeagueFromParens(parenGroups, teamName);
   if (leagueText === "Unknown" && parenGroups.length === 0) {
@@ -707,9 +745,13 @@ const CAREER_TRANSACTION_PATTERNS = [
   /\bwaived\b/i,
   /\bsigned with\b/i,
   /\bsigned to\b/i,
+  /\bsigned at\b/i,
   /\bfree agent\b/i,
   /\bentered the draft\b/i,
   /\bnba draft\b/i,
+  /\bmissed (most of )?(the )?season\b/i,
+  /\bout for the season\b/i,
+  /\bdue to (an )?injury\b/i,
 ] as const;
 
 /** Skip draft/trade/news career lines that are not real team-season stints. */
@@ -724,6 +766,7 @@ export function isCareerTransactionSeason(
   const combined = `${team} ${league}`;
 
   if (/^\$[\d,\s]/.test(team)) return true;
+  if (isNarrativeCareerTeamName(team)) return true;
 
   const hasPlayedStats =
     season.gamesPlayed > 0 ||
@@ -735,8 +778,13 @@ export function isCareerTransactionSeason(
     return false;
   }
 
-  if (CAREER_TRANSACTION_PATTERNS.some((pattern) => pattern.test(combined))) {
+  if (!hasPlayedStats && CAREER_TRANSACTION_PATTERNS.some((pattern) => pattern.test(combined))) {
     return true;
+  }
+
+  if (hasPlayedStats && CAREER_TRANSACTION_PATTERNS.some((pattern) => pattern.test(combined))) {
+    // Real stint with stats — keep even if the line mentions signing (team name already normalized).
+    return false;
   }
 
   if (/^traded to\b/i.test(league)) return true;
