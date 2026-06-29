@@ -1,49 +1,64 @@
 #!/usr/bin/env node
 import {
+  DEFAULT_SEASON_CACHE,
+  DEFAULT_SLUG_CACHE,
+  NCAA_LEAGUE_NAME,
+  NCAA_USBASKET_SEGMENT,
+} from "./division.js";
+import {
   BACKFILL_INDEX_DELAY_MS,
   BACKFILL_PLAYER_DELAY_MS,
-  DEFAULT_PLAYER_DELAY_MS,
   loadConfig,
 } from "./config.js";
 import { IngestClient } from "./ingestClient.js";
-import {
-  DEFAULT_CHECKPOINT,
-  DEFAULT_LOG,
-} from "./scrape/checkpoint.js";
-import { DEFAULT_SEASON_CACHE } from "./scrape/discovery.js";
-import { DEFAULT_NCAA_LINK_CACHE } from "./scrape/linkCache.js";
 import { printSummary, runScrape } from "./scrape/runner.js";
-import { DEFAULT_SLUG_CACHE } from "./scrape/slugCache.js";
-import { DEFAULT_TEAM_CACHE } from "./scrape/teamCache.js";
 import type { ScrapeOptions } from "./types.js";
+import { DEFAULT_TEAM_CACHE } from "./scrape/teamCache.js";
+import {
+  normalizeShardConfig,
+  parseShardValue,
+  shardCheckpointPath,
+  shardLabel,
+  shardLinkCachePath,
+  shardLogPath,
+} from "./utils/shard.js";
 
 function printUsage(): void {
-  console.log(`NCAAD1Scraper — usbasket.com NCAA D1 → Hoop Central season stats
+  console.log(`CCAAScraper — usbasket.com ${NCAA_USBASKET_SEGMENT} → Hoop Central (${NCAA_LEAGUE_NAME})
 
 Usage:
   npm run scrape -- [options]
 
 Options:
-  --backfill             Crawl usbasket NCAA index (all seasons) and ingest all players
+  --backfill             Crawl usbasket CCAA index (all seasons) and ingest all players
   --dry-run              Parse and log payloads; do not POST
   --resume               Skip player IDs in checkpoint file (default with --backfill)
   --fresh                Ignore checkpoint and reprocess all
   --limit <n>            Cap players processed (testing)
-  --player-slug <id>     Single player test (usbasket player ID, e.g. 736073)
-  --delay <ms>           Override request delay (default: 12000)
+  --player-slug <id>     Single player test (usbasket player ID)
+  --delay <ms>           Override request delay (default from .env)
+  --shard <n>            Shard index (use with --shards, or pass n/total e.g. 0/2)
+  --shards <n>           Total parallel shards (default: 1)
   --health               Check Hoop Central health and exit
   --fixtures             Use local HTML fixtures (tests only)
   --help                 Show this help
 
 Examples:
-  npm run scrape:dry-run -- --player-slug 736073
-  npm run scrape -- --player-slug 736073
+  npm run scrape:dry-run -- --player-slug <id>
+  npm run scrape -- --player-slug <id>
   npm run test:build
   npm run scrape:backfill -- --resume --limit 5
+  npm run scrape:backfill:shard0 -- --resume
+  npm run scrape:backfill:shard1 -- --resume
 `);
 }
 
-function parseArgs(argv: string[]): ScrapeOptions & { showHelp: boolean; health: boolean } {
+function parseArgs(argv: string[]): Omit<ScrapeOptions, "requestDelayMs" | "indexDelayMs"> & {
+  showHelp: boolean;
+  health: boolean;
+  requestDelayMs?: number;
+  indexDelayMs?: number;
+} {
   let backfill = false;
   let dryRun = false;
   let resume = false;
@@ -54,6 +69,8 @@ function parseArgs(argv: string[]): ScrapeOptions & { showHelp: boolean; health:
   let playerSlug: string | undefined;
   let requestDelayMs: number | undefined;
   let showHelp = false;
+  let shardIndex: number | undefined;
+  let shardCount: number | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -65,7 +82,6 @@ function parseArgs(argv: string[]): ScrapeOptions & { showHelp: boolean; health:
       case "--backfill":
         backfill = true;
         resume = true;
-        requestDelayMs = requestDelayMs ?? BACKFILL_PLAYER_DELAY_MS;
         break;
       case "--dry-run":
         dryRun = true;
@@ -82,6 +98,23 @@ function parseArgs(argv: string[]): ScrapeOptions & { showHelp: boolean; health:
       case "--fixtures":
         useFixtures = true;
         break;
+      case "--shard": {
+        const value = argv[++i];
+        if (!value) throw new Error("--shard requires a value");
+        const parsed = parseShardValue(value);
+        shardIndex = parsed.shardIndex;
+        if (parsed.shardCount > 0) shardCount = parsed.shardCount;
+        break;
+      }
+      case "--shards": {
+        const value = argv[++i];
+        if (!value) throw new Error("--shards requires a value");
+        shardCount = Number.parseInt(value, 10);
+        if (Number.isNaN(shardCount) || shardCount <= 0) {
+          throw new Error(`Invalid --shards value: ${value}`);
+        }
+        break;
+      }
       case "--limit": {
         const value = argv[++i];
         if (!value) throw new Error("--limit requires a value");
@@ -113,6 +146,15 @@ function parseArgs(argv: string[]): ScrapeOptions & { showHelp: boolean; health:
     showHelp = true;
   }
 
+  if (shardIndex != null && shardCount == null) {
+    throw new Error("Use --shard n/total (e.g. 0/2) or pass both --shard and --shards");
+  }
+  if (shardCount != null && shardCount > 1 && shardIndex == null) {
+    throw new Error("--shards requires --shard");
+  }
+
+  const shard = normalizeShardConfig(shardIndex, shardCount);
+
   return {
     backfill,
     dryRun,
@@ -121,15 +163,16 @@ function parseArgs(argv: string[]): ScrapeOptions & { showHelp: boolean; health:
     health,
     limit,
     playerSlug,
-    requestDelayMs:
-      requestDelayMs ?? (backfill ? BACKFILL_PLAYER_DELAY_MS : DEFAULT_PLAYER_DELAY_MS),
-    indexDelayMs: BACKFILL_INDEX_DELAY_MS,
-    checkpointPath: DEFAULT_CHECKPOINT,
-    logPath: DEFAULT_LOG,
+    requestDelayMs,
+    indexDelayMs: undefined,
+    checkpointPath: shardCheckpointPath(shard.shardIndex, shard.shardCount),
+    logPath: shardLogPath(shard.shardIndex, shard.shardCount),
     slugCachePath: DEFAULT_SLUG_CACHE,
     seasonCachePath: DEFAULT_SEASON_CACHE,
     teamCachePath: DEFAULT_TEAM_CACHE,
-    linkCachePath: DEFAULT_NCAA_LINK_CACHE,
+    linkCachePath: shardLinkCachePath(shard.shardIndex, shard.shardCount),
+    shardIndex: shard.shardIndex,
+    shardCount: shard.shardCount,
     showHelp,
   };
 }
@@ -152,11 +195,32 @@ async function main(): Promise<void> {
     process.exit(health.ok ? 0 : 1);
   }
 
-  const { showHelp: _showHelp, health: _health, ...scrapeOptions } = args;
+  const {
+    showHelp: _showHelp,
+    health: _health,
+    requestDelayMs: cliDelay,
+    indexDelayMs: _cliIndexDelay,
+    ...rest
+  } = args;
 
-  console.log("Starting NCAAD1Scraper");
+  const scrapeOptions: ScrapeOptions = {
+    ...rest,
+    requestDelayMs:
+      cliDelay ??
+      (rest.backfill
+        ? Math.min(config.requestDelayMs, BACKFILL_PLAYER_DELAY_MS)
+        : config.requestDelayMs),
+    indexDelayMs: rest.backfill
+      ? Math.min(config.indexDelayMs, BACKFILL_INDEX_DELAY_MS)
+      : config.indexDelayMs,
+  };
+
+  console.log("Starting CCAAScraper");
   console.log(`Target: ${config.hoopCentralApiUrl}`);
   console.log(`Mode: ${args.dryRun ? "dry-run" : "live ingest"}`);
+  if (scrapeOptions.shardCount > 1) {
+    console.log(`Shard: ${shardLabel(scrapeOptions.shardIndex, scrapeOptions.shardCount)}`);
+  }
   console.log("");
 
   const { summary } = await runScrape(config, scrapeOptions);

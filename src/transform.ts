@@ -3,8 +3,9 @@ import type {
   HoopCentralIngestResponse,
   NcaaPlayerSeasonRecord,
 } from "./types.js";
+import { NCAA_LEAGUE_NAME, NCAA_LEAGUE_SLUG } from "./division.js";
 import { NCAA_SOURCE } from "./types.js";
-import { nameToSlug, teamAbbreviation } from "./utils/teams.js";
+import { normalizeUsportsTeam } from "./utils/usportsTeams.js";
 
 export function toIngestPayload(
   record: NcaaPlayerSeasonRecord,
@@ -53,16 +54,17 @@ export function buildPlayerSeasonRecord(input: {
   seasonLabel: string;
   stats: NcaaPlayerSeasonRecord["stats"];
 }): NcaaPlayerSeasonRecord {
-  const teamName = input.teamName.replace(/&quote;/g, "'");
-  const abbrev = input.teamAbbreviation ?? teamAbbreviation(teamName);
+  const rawTeamName = input.teamName.replace(/&quote;/g, "'");
+  const team = normalizeUsportsTeam(rawTeamName);
+  const abbrev = input.teamAbbreviation ?? team.abbreviation;
   return {
     source: NCAA_SOURCE,
     externalId: input.externalId,
     displayName: input.displayName,
-    leagueSlug: "ncaa",
-    leagueName: "NCAA Division I",
-    teamSlug: nameToSlug(teamName),
-    teamName,
+    leagueSlug: NCAA_LEAGUE_SLUG,
+    leagueName: NCAA_LEAGUE_NAME,
+    teamSlug: team.slug,
+    teamName: team.name,
     teamAbbreviation: abbrev,
     seasonLabel: input.seasonLabel,
     stats: input.stats,

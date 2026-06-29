@@ -1,4 +1,10 @@
-export const NCAA_SOURCE = "usbasket-ncaa-d1" as const;
+import {
+  NCAA_LEAGUE_NAME,
+  NCAA_LEAGUE_SLUG,
+  NCAA_SOURCE,
+} from "./division.js";
+
+export { NCAA_SOURCE };
 
 export interface UsbasketIndexRow {
   PLAYERID: string;
@@ -95,8 +101,8 @@ export interface NcaaPlayerSeasonRecord {
   source: typeof NCAA_SOURCE;
   externalId: string;
   displayName: string;
-  leagueSlug: "ncaa";
-  leagueName: "NCAA Division I";
+  leagueSlug: typeof NCAA_LEAGUE_SLUG;
+  leagueName: typeof NCAA_LEAGUE_NAME;
   teamSlug: string;
   teamName: string;
   teamAbbreviation: string;
@@ -126,8 +132,8 @@ export interface HoopCentralIngestPayload {
     headshotUrl?: string | null;
   };
   league: {
-    slug: "ncaa";
-    name: "NCAA Division I";
+    slug: typeof NCAA_LEAGUE_SLUG;
+    name: typeof NCAA_LEAGUE_NAME;
   };
   team: {
     slug: string;
@@ -177,6 +183,8 @@ export interface ScrapeOptions {
   seasonCachePath: string;
   teamCachePath: string;
   linkCachePath: string;
+  shardIndex: number;
+  shardCount: number;
 }
 
 export interface ScrapeSummary {

@@ -33,9 +33,10 @@ export interface AppConfig {
   includeFgPct: boolean;
 }
 
-export const DEFAULT_PLAYER_DELAY_MS = 12_000;
-export const BACKFILL_PLAYER_DELAY_MS = 12_000;
-export const BACKFILL_INDEX_DELAY_MS = 15_000;
+export const DEFAULT_PLAYER_DELAY_MS = 800;
+export const DEFAULT_INDEX_DELAY_MS = 1_500;
+export const BACKFILL_PLAYER_DELAY_MS = 400;
+export const BACKFILL_INDEX_DELAY_MS = 800;
 
 export function loadConfig(): AppConfig {
   const hoopCentralApiUrl = normalizeBaseUrl(
@@ -63,7 +64,7 @@ export function loadConfig(): AppConfig {
     ),
     indexDelayMs: parseOptionalInt(
       process.env.SCRAPE_INDEX_DELAY_MS,
-      BACKFILL_INDEX_DELAY_MS,
+      DEFAULT_INDEX_DELAY_MS,
     ),
     includeFgPct,
   };

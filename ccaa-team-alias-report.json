@@ -1,0 +1,313 @@
+{
+  "generatedAt": "2026-06-29T13:06:22.013Z",
+  "aliasMap": {
+    "vanier-college": "vanier"
+  },
+  "allTeams": [
+    {
+      "teamName": "Ahuntsic",
+      "teamAbbreviation": "AHU",
+      "slug": "ahuntsic"
+    },
+    {
+      "teamName": "Alb-Augustana",
+      "teamAbbreviation": "ALB",
+      "slug": "alb-augustana"
+    },
+    {
+      "teamName": "Algonquin",
+      "teamAbbreviation": "ALG",
+      "slug": "algonquin"
+    },
+    {
+      "teamName": "Ambrose",
+      "teamAbbreviation": "AMB",
+      "slug": "ambrose"
+    },
+    {
+      "teamName": "Briercrest",
+      "teamAbbreviation": "BRI",
+      "slug": "briercrest"
+    },
+    {
+      "teamName": "Camosun",
+      "teamAbbreviation": "CAM",
+      "slug": "camosun"
+    },
+    {
+      "teamName": "Canadore",
+      "teamAbbreviation": "CAN",
+      "slug": "canadore"
+    },
+    {
+      "teamName": "Capilano",
+      "teamAbbreviation": "CAP",
+      "slug": "capilano"
+    },
+    {
+      "teamName": "Cbc",
+      "teamAbbreviation": "CBC",
+      "slug": "cbc"
+    },
+    {
+      "teamName": "Centennial",
+      "teamAbbreviation": "CEN",
+      "slug": "centennial"
+    },
+    {
+      "teamName": "Ch.-St-Lambert",
+      "teamAbbreviation": "CH.",
+      "slug": "ch-st-lambert"
+    },
+    {
+      "teamName": "Concordia",
+      "teamAbbreviation": "CON",
+      "slug": "concordia"
+    },
+    {
+      "teamName": "Conestoga",
+      "teamAbbreviation": "CON",
+      "slug": "conestoga"
+    },
+    {
+      "teamName": "Crandall",
+      "teamAbbreviation": "CRA",
+      "slug": "crandall"
+    },
+    {
+      "teamName": "Dawson",
+      "teamAbbreviation": "DAW",
+      "slug": "dawson"
+    },
+    {
+      "teamName": "Douglas",
+      "teamAbbreviation": "DOU",
+      "slug": "douglas"
+    },
+    {
+      "teamName": "Durham",
+      "teamAbbreviation": "DUR",
+      "slug": "durham"
+    },
+    {
+      "teamName": "Edouard-Montp.",
+      "teamAbbreviation": "EDO",
+      "slug": "edouard-montp"
+    },
+    {
+      "teamName": "Fanshawe",
+      "teamAbbreviation": "FAN",
+      "slug": "fanshawe"
+    },
+    {
+      "teamName": "Fleming",
+      "teamAbbreviation": "FLE",
+      "slug": "fleming"
+    },
+    {
+      "teamName": "George Brown",
+      "teamAbbreviation": "GB",
+      "slug": "george-brown"
+    },
+    {
+      "teamName": "Georgian",
+      "teamAbbreviation": "GEO",
+      "slug": "georgian"
+    },
+    {
+      "teamName": "Holland",
+      "teamAbbreviation": "HOL",
+      "slug": "holland"
+    },
+    {
+      "teamName": "Humber",
+      "teamAbbreviation": "HUM",
+      "slug": "humber"
+    },
+    {
+      "teamName": "Jean-De-Breb.",
+      "teamAbbreviation": "JEA",
+      "slug": "jean-de-breb"
+    },
+    {
+      "teamName": "John Abbott",
+      "teamAbbreviation": "JA",
+      "slug": "john-abbott"
+    },
+    {
+      "teamName": "Keyano",
+      "teamAbbreviation": "KEY",
+      "slug": "keyano"
+    },
+    {
+      "teamName": "King'S Univ.",
+      "teamAbbreviation": "KU",
+      "slug": "king-s-univ"
+    },
+    {
+      "teamName": "La Cite",
+      "teamAbbreviation": "LC",
+      "slug": "la-cite"
+    },
+    {
+      "teamName": "Lakeland",
+      "teamAbbreviation": "LAK",
+      "slug": "lakeland"
+    },
+    {
+      "teamName": "Lambton",
+      "teamAbbreviation": "LAM",
+      "slug": "lambton"
+    },
+    {
+      "teamName": "Langara",
+      "teamAbbreviation": "LAN",
+      "slug": "langara"
+    },
+    {
+      "teamName": "Lethbridge",
+      "teamAbbreviation": "LET",
+      "slug": "lethbridge"
+    },
+    {
+      "teamName": "Loyalist",
+      "teamAbbreviation": "LOY",
+      "slug": "loyalist"
+    },
+    {
+      "teamName": "Medicine Hat",
+      "teamAbbreviation": "MH",
+      "slug": "medicine-hat"
+    },
+    {
+      "teamName": "Mohawk",
+      "teamAbbreviation": "MOH",
+      "slug": "mohawk"
+    },
+    {
+      "teamName": "Montmorency",
+      "teamAbbreviation": "MON",
+      "slug": "montmorency"
+    },
+    {
+      "teamName": "Mount Allison",
+      "teamAbbreviation": "MA",
+      "slug": "mount-allison"
+    },
+    {
+      "teamName": "Msvu",
+      "teamAbbreviation": "MSV",
+      "slug": "msvu"
+    },
+    {
+      "teamName": "Nait",
+      "teamAbbreviation": "NAI",
+      "slug": "nait"
+    },
+    {
+      "teamName": "Niagara",
+      "teamAbbreviation": "NIA",
+      "slug": "niagara"
+    },
+    {
+      "teamName": "Nwp",
+      "teamAbbreviation": "NWP",
+      "slug": "nwp"
+    },
+    {
+      "teamName": "Okanagan",
+      "teamAbbreviation": "OKA",
+      "slug": "okanagan"
+    },
+    {
+      "teamName": "Olds",
+      "teamAbbreviation": "OLD",
+      "slug": "olds"
+    },
+    {
+      "teamName": "Outaouais",
+      "teamAbbreviation": "OUT",
+      "slug": "outaouais"
+    },
+    {
+      "teamName": "Red Deer",
+      "teamAbbreviation": "RD",
+      "slug": "red-deer"
+    },
+    {
+      "teamName": "Redeemer",
+      "teamAbbreviation": "RED",
+      "slug": "redeemer"
+    },
+    {
+      "teamName": "Sainte-Foy",
+      "teamAbbreviation": "SAI",
+      "slug": "sainte-foy"
+    },
+    {
+      "teamName": "Sait",
+      "teamAbbreviation": "SAI",
+      "slug": "sait"
+    },
+    {
+      "teamName": "Seneca",
+      "teamAbbreviation": "SEN",
+      "slug": "seneca"
+    },
+    {
+      "teamName": "Sherbrooke",
+      "teamAbbreviation": "SHE",
+      "slug": "sherbrooke"
+    },
+    {
+      "teamName": "Sheridan",
+      "teamAbbreviation": "SHE",
+      "slug": "sheridan"
+    },
+    {
+      "teamName": "St.Clair",
+      "teamAbbreviation": "ST.",
+      "slug": "st-clair"
+    },
+    {
+      "teamName": "St.Lawrence",
+      "teamAbbreviation": "ST.",
+      "slug": "st-lawrence"
+    },
+    {
+      "teamName": "St.Thomas",
+      "teamAbbreviation": "ST.",
+      "slug": "st-thomas"
+    },
+    {
+      "teamName": "Stmu",
+      "teamAbbreviation": "STM",
+      "slug": "stmu"
+    },
+    {
+      "teamName": "The King'S",
+      "teamAbbreviation": "TK",
+      "slug": "the-king-s"
+    },
+    {
+      "teamName": "Thetford",
+      "teamAbbreviation": "THE",
+      "slug": "thetford"
+    },
+    {
+      "teamName": "Unbsj",
+      "teamAbbreviation": "UNB",
+      "slug": "unbsj"
+    },
+    {
+      "teamName": "Vanier",
+      "teamAbbreviation": "VAN",
+      "slug": "vanier"
+    },
+    {
+      "teamName": "Viu",
+      "teamAbbreviation": "VIU",
+      "slug": "viu"
+    }
+  ]
+}

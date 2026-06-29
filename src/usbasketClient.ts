@@ -1,13 +1,14 @@
+import { NCAA_USBASKET_INDEX_URL } from "./division.js";
 import { backoffMs, jitterMs, parseRetryAfterMs, sleep } from "./utils/rateLimiter.js";
 import type { UsbasketIndexRow } from "./types.js";
 import { normalizeSeasonLabel } from "./utils/season.js";
 
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; HoopCentralNCAAScraper/1.0; +https://github.com/hoopcentral)";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 const LOGIN_URL = "https://www.eurobasket.com/news_system/login.aspx";
 const LOGIN_POST_URL = "https://www.eurobasket.com/news_system/ndverifikacijasub.aspx";
-const INDEX_BASE = "https://www.usbasket.com/NCAA1/basketball-Players.aspx";
+const INDEX_BASE = NCAA_USBASKET_INDEX_URL;
 
 function parseSetCookieHeaders(response: Response): string[] {
   const fromArray = response.headers.getSetCookie?.() ?? [];
@@ -100,14 +101,42 @@ export function parseStrDataFromHtml(html: string): UsbasketIndexRow[] | null {
 
 /** Player profile / index links → usbasket numeric IDs (men's links only). */
 export function parsePlayerIdsFromIndexHtml(html: string): string[] {
-  const ids = new Set<string>();
+  return parsePlayersFromIndexHtml(html).map((entry) => entry.playerId);
+}
+
+/** Player IDs and raw link labels from usbasket index HTML (men's links only). */
+export function parsePlayersFromIndexHtml(
+  html: string,
+): Array<{ playerId: string; playerName: string }> {
+  const byId = new Map<string, string>();
+
+  for (const match of html.matchAll(
+    /href="https?:\/\/basketball\.usbasket\.com\/player\/([^"'?\s]+)\/(\d+)"[^>]*>([^<]*)</gi,
+  )) {
+    const start = match.index ?? 0;
+    const tail = html.slice(start, start + match[0].length + 12);
+    if (/Women=1/i.test(tail)) continue;
+
+    const playerId = match[2];
+    const linkText = match[3].trim();
+    const slugName = match[1].replace(/-/g, " ").trim();
+    const playerName = linkText || slugName;
+    if (!playerName || byId.has(playerId)) continue;
+    byId.set(playerId, playerName);
+  }
+
   for (const match of html.matchAll(/\/player\/[^"'?\s]+\/(\d+)/gi)) {
     const start = match.index ?? 0;
     const tail = html.slice(start, start + match[0].length + 12);
     if (/Women=1/i.test(tail)) continue;
-    ids.add(match[1]);
+    if (!byId.has(match[1])) {
+      byId.set(match[1], "");
+    }
   }
-  return [...ids].sort();
+
+  return [...byId.entries()]
+    .map(([playerId, playerName]) => ({ playerId, playerName }))
+    .sort((a, b) => a.playerId.localeCompare(b.playerId, undefined, { numeric: true }));
 }
 
 export function listSeasonYearParams(html: string): string[] {
@@ -236,7 +265,8 @@ export class UsbasketClient {
   }
 
   private effectiveDelay(minDelayMs: number): number {
-    return minDelayMs + this.penaltyDelayMs + jitterMs(2500);
+    const jitterCap = Math.min(800, Math.max(50, Math.floor(minDelayMs * 0.2)));
+    return minDelayMs + this.penaltyDelayMs + jitterMs(jitterCap);
   }
 
   private decayPenalty(): void {
@@ -349,7 +379,7 @@ export class UsbasketClient {
   }
 
   async fetchPlayerStatsAjax(playerId: string, seasonParam: string): Promise<string> {
-    await this.throttle(Math.min(this.requestDelayMs, 4000));
+    await this.throttle(this.requestDelayMs);
 
     const response = await fetch(
       "https://basketball.usbasket.com/PlayerDetailsAjax.aspx/PlayerStatsAjax",

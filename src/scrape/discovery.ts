@@ -3,18 +3,22 @@ import type { CachedPlayerSeasons } from "../types.js";
 import {
   listSeasonYearParams,
   parsePlayerIdsFromIndexHtml,
+  parsePlayersFromIndexHtml,
   type UsbasketClient,
   UsbasketRateLimitError,
 } from "../usbasketClient.js";
 import {
   defaultSeasonLabelForYearParam,
+  indexRowToPlaceholderSeasonRow,
   indexRowToSeasonRow,
   mergeSeasonRows,
   parseSeasonRowsFromIndexData,
 } from "./playerSeason.js";
-import { normalizeSeasonLabel } from "../utils/season.js";
+import { formatDisplayName, normalizeSeasonLabel } from "../utils/season.js";
 
-export const DEFAULT_SEASON_CACHE = "ncaa-player-seasons.cache.json";
+import { DEFAULT_SEASON_CACHE, NCAA_USBASKET_BOOTSTRAP_YEAR } from "../division.js";
+
+export { DEFAULT_SEASON_CACHE };
 
 export function loadSeasonCache(path: string): CachedPlayerSeasons | null {
   if (!existsSync(path)) return null;
@@ -52,7 +56,11 @@ function mergeSeason(
 export async function discoverAllPlayers(
   client: UsbasketClient,
 ): Promise<{ cache: CachedPlayerSeasons; slugs: string[] }> {
-  const bootstrapHtml = await client.fetchHtml(client.indexUrl("2025-2026"), 8, true);
+  const bootstrapHtml = await client.fetchHtml(
+    client.indexUrl(NCAA_USBASKET_BOOTSTRAP_YEAR),
+    8,
+    true,
+  );
   let yearParams = listSeasonYearParams(bootstrapHtml);
   if (!yearParams.length) {
     yearParams = [
@@ -105,20 +113,31 @@ export async function discoverAllPlayers(
           cache.players[entry.playerId] = existing;
         }
       } else {
-        const discoveredIds = parsePlayerIdsFromIndexHtml(html);
-        console.log(
-          `[index]   no strData JSON — registered ${discoveredIds.length} player IDs (name index only)`,
-        );
+        console.log(`[index]   no strData JSON for Year=${yearParam}`);
+      }
 
-        for (const playerId of discoveredIds) {
-          if (!cache.players[playerId]) {
+      const discoveredPlayers = parsePlayersFromIndexHtml(html);
+      if (discoveredPlayers.length) {
+        console.log(`[index]   registered ${discoveredPlayers.length} player IDs from page links`);
+        for (const { playerId, playerName } of discoveredPlayers) {
+          const displayName = playerName
+            ? formatDisplayName(playerName)
+            : `Player-${playerId}`;
+          const existing = cache.players[playerId];
+          if (!existing) {
             cache.players[playerId] = {
-              displayName: `Player-${playerId}`,
+              displayName,
               position: null,
               seasons: [],
             };
+            continue;
+          }
+          if (playerName && /^Player-\d+$/.test(existing.displayName)) {
+            existing.displayName = displayName;
           }
         }
+      } else if (!rows?.length) {
+        console.log(`[index]   no player links found for Year=${yearParam}`);
       }
     } catch (error) {
       if (error instanceof UsbasketRateLimitError) throw error;
@@ -128,18 +147,56 @@ export async function discoverAllPlayers(
   }
 
   const slugs = Object.keys(cache.players).sort();
-  console.log(`[index] Discovery complete: ${slugs.length} unique players`);
+  const withStats = slugs.filter((id) => (cache.players[id]?.seasons.length ?? 0) > 0).length;
+  console.log(
+    `[index] Discovery complete: ${slugs.length} unique players (${withStats} with index stats)`,
+  );
   return { cache, slugs };
 }
 
-/** Scan season indexes when profile AJAX has no NCAA rows (common for NBA-profile pages). */
-export async function fetchIndexSeasonsForPlayer(
+/** Find a player's name on the index (newest seasons first). */
+export async function lookupPlayerMetaFromIndex(
   client: UsbasketClient,
   playerId: string,
-): Promise<CachedPlayerSeasons["players"][string]["seasons"]> {
-  const bootstrapHtml = await client.fetchHtml(client.indexUrl("2025-2026"), 8, true);
+): Promise<{ displayName: string; position: string | null } | null> {
+  const bootstrapHtml = await client.fetchHtml(
+    client.indexUrl(NCAA_USBASKET_BOOTSTRAP_YEAR),
+    8,
+    true,
+  );
   const yearParams = listSeasonYearParams(bootstrapHtml);
-  const seasons: CachedPlayerSeasons["players"][string]["seasons"] = [];
+
+  for (const yearParam of [...yearParams].reverse()) {
+    const { rows } = await client.fetchSeasonIndex(yearParam);
+    if (!rows?.length) continue;
+
+    for (const row of rows) {
+      if (row.PLAYERID?.trim() !== playerId) continue;
+      return {
+        displayName: formatDisplayName(row.PLAYERNAME),
+        position: row.POSITION?.trim() || null,
+      };
+    }
+  }
+
+  return null;
+}
+
+/** Backfill fast path: newest index season only (avoids scanning all 19 years). */
+export async function lookupFirstIndexSeasonForPlayer(
+  client: UsbasketClient,
+  playerId: string,
+): Promise<{
+  displayName: string;
+  position: string | null;
+  season: CachedPlayerSeasons["players"][string]["seasons"][number];
+} | null> {
+  const bootstrapHtml = await client.fetchHtml(
+    client.indexUrl(NCAA_USBASKET_BOOTSTRAP_YEAR),
+    8,
+    true,
+  );
+  const yearParams = listSeasonYearParams(bootstrapHtml);
 
   for (const yearParam of [...yearParams].reverse()) {
     const { rows } = await client.fetchSeasonIndex(yearParam);
@@ -155,10 +212,75 @@ export async function fetchIndexSeasonsForPlayer(
         if (fromRow) label = fromRow;
       }
 
-      const season = indexRowToSeasonRow(row, label);
+      const season =
+        indexRowToSeasonRow(row, label) ?? indexRowToPlaceholderSeasonRow(row, label);
+      if (!season) continue;
+
+      return {
+        displayName: formatDisplayName(row.PLAYERNAME),
+        position: row.POSITION?.trim() || null,
+        season,
+      };
+    }
+  }
+
+  return null;
+}
+
+/** Resolve name + index seasons for one player (single-player runs without a saved cache). */
+export async function resolvePlayerFromIndex(
+  client: UsbasketClient,
+  playerId: string,
+): Promise<CachedPlayerSeasons["players"][string] | null> {
+  const bootstrapHtml = await client.fetchHtml(
+    client.indexUrl(NCAA_USBASKET_BOOTSTRAP_YEAR),
+    8,
+    true,
+  );
+  const yearParams = listSeasonYearParams(bootstrapHtml);
+  let displayName: string | null = null;
+  let position: string | null = null;
+  const seasons: CachedPlayerSeasons["players"][string]["seasons"] = [];
+
+  for (const yearParam of [...yearParams].reverse()) {
+    const { rows } = await client.fetchSeasonIndex(yearParam);
+    if (!rows?.length) continue;
+
+    const defaultLabel = defaultSeasonLabelForYearParam(yearParam);
+    for (const row of rows) {
+      if (row.PLAYERID?.trim() !== playerId) continue;
+
+      if (!displayName) {
+        displayName = formatDisplayName(row.PLAYERNAME);
+        position = row.POSITION?.trim() || null;
+      }
+
+      let label = defaultLabel;
+      if (row.Season) {
+        const fromRow = normalizeSeasonLabel(row.Season);
+        if (fromRow) label = fromRow;
+      }
+
+      const season =
+        indexRowToSeasonRow(row, label) ?? indexRowToPlaceholderSeasonRow(row, label);
       if (season) seasons.push(season);
     }
   }
 
-  return mergeSeasonRows(seasons);
+  if (!displayName) return null;
+
+  return {
+    displayName,
+    position,
+    seasons: mergeSeasonRows(seasons),
+  };
+}
+
+/** Scan season indexes when profile AJAX has no NCAA rows (common for NBA-profile pages). */
+export async function fetchIndexSeasonsForPlayer(
+  client: UsbasketClient,
+  playerId: string,
+): Promise<CachedPlayerSeasons["players"][string]["seasons"]> {
+  const resolved = await resolvePlayerFromIndex(client, playerId);
+  return resolved?.seasons ?? [];
 }

@@ -5,6 +5,10 @@ import { parseStrDataFromHtml } from "../usbasketClient.js";
 import {
   indexRowToSeasonRow,
   parseNcaaSeasonFromStatsHtml,
+  parseCareerYearByYearSeasons,
+  createZeroStatSeasonRow,
+  indexRowToPlaceholderSeasonRow,
+  mergeSeasonRows,
   parseSeasonRowsFromIndexData,
   parseSeasonRowsFromPlayerHtml,
 } from "../scrape/playerSeason.js";
@@ -14,6 +18,7 @@ import {
 } from "../scrape/playerMeta.js";
 import { matchBdlExternalId, buildBdlLookup, isPlausibleCollegeAge, matchExternalId } from "../scrape/linking.js";
 import { normalizeSeasonLabel, calcPct } from "../utils/season.js";
+import { normalizeUsportsTeam, isValidUsportsTeamName } from "../utils/usportsTeams.js";
 
 describe("season utils", () => {
   it("normalizes usbasket season labels", () => {
@@ -60,7 +65,7 @@ describe("index parsing", () => {
 describe("player page parsing", () => {
   it("parses AVERAGES row from player fixture", () => {
     const html = readFileSync("src/test/fixtures/player-736073.html", "utf8");
-    const seasons = parseSeasonRowsFromPlayerHtml(html);
+    const seasons = parseSeasonRowsFromPlayerHtml(html, "NCAA1");
     assert.ok(seasons.length >= 1);
     const current = seasons[0];
     assert.equal(current.seasonLabel, "2025-26");
@@ -71,12 +76,87 @@ describe("player page parsing", () => {
 
   it("parses PlayerStatsAjax NCAA fragment (AVERAGE header)", () => {
     const fragment = readFileSync("src/test/fixtures/player-stats-ajax-2012.html", "utf8");
-    const season = parseNcaaSeasonFromStatsHtml(fragment);
+    const season = parseNcaaSeasonFromStatsHtml(fragment, "NCAA1");
     assert.ok(season);
     assert.equal(season.seasonLabel, "2011-12");
     assert.equal(season.teamName, "Duke");
     assert.equal(season.gamesPlayed, 36);
     assert.equal(season.pointsPerGame, 13.2);
+  });
+
+  it("parses CCAA stats labeled (NAIA) with my_pStats1 averages", () => {
+    const fragment = readFileSync("src/test/fixtures/player-stats-ccaa-2024.html", "utf8");
+    const season = parseNcaaSeasonFromStatsHtml(fragment);
+    assert.ok(season);
+    assert.equal(season.seasonLabel, "2024-25");
+    assert.equal(season.teamName, "Keyano");
+    assert.equal(season.gamesPlayed, 3);
+    assert.equal(season.pointsPerGame, 2.7);
+    assert.equal(season.reboundsPerGame, 2.7);
+  });
+
+  it("builds placeholder season rows from CCAA index rows with Games=0", () => {
+    const row = {
+      PLAYERID: "734991",
+      PLAYERNAME: "Aaron Josiah",
+      TEAMNAME: "Keyano",
+      Games: "0",
+      PTS: "0",
+      REBT: "0",
+      AS: "0",
+      ST: "0",
+      BS: "0",
+      FGPM2: "0",
+      FGPA2: "0",
+      FGPM3: "0",
+      FGPA3: "0",
+    };
+    const placeholder = indexRowToPlaceholderSeasonRow(row, "2023-24");
+    assert.ok(placeholder);
+    assert.equal(placeholder?.teamName, "Keyano");
+    assert.equal(placeholder?.gamesPlayed, 0);
+    assert.equal(placeholder?.pointsPerGame, 0);
+  });
+
+  it("prefers real stats over zero-stat placeholders when merging", () => {
+    const merged = mergeSeasonRows(
+      [createZeroStatSeasonRow("Keyano", "2024-25")],
+      [
+        {
+          seasonLabel: "2024-25",
+          teamName: "Keyano",
+          teamAbbreviation: "KEY",
+          gamesPlayed: 3,
+          pointsPerGame: 2.7,
+          reboundsPerGame: 2.7,
+          assistsPerGame: 0,
+          stealsPerGame: 0,
+          blocksPerGame: 0.3,
+          fieldGoalPct: 100,
+          threePointPct: 0,
+        },
+      ],
+    );
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0]?.gamesPlayed, 3);
+    assert.equal(merged[0]?.pointsPerGame, 2.7);
+  });
+
+  it("parses CCAA Year-By-Year Career lines on profile pages", () => {
+    const fragment = readFileSync("src/test/fixtures/player-career-brandon-ellis.html", "utf8");
+    const seasons = parseCareerYearByYearSeasons(fragment, "CCAA");
+    assert.equal(seasons.length, 2);
+    assert.deepEqual(
+      seasons.map((season) => ({
+        seasonLabel: season.seasonLabel,
+        teamName: season.teamName,
+        pointsPerGame: season.pointsPerGame,
+      })),
+      [
+        { seasonLabel: "1999-00", teamName: "Vanier College", pointsPerGame: 20 },
+        { seasonLabel: "2000-01", teamName: "Vanier College", pointsPerGame: 37 },
+      ],
+    );
   });
 });
 
@@ -94,6 +174,21 @@ describe("player bio parsing", () => {
   it("normalizes usbasket birth date strings", () => {
     assert.equal(parseUsbasketBirthDate("Nov.16, 2006"), "2006-11-16");
     assert.equal(parseUsbasketBirthDate("November 16 2006"), "2006-11-16");
+    assert.equal(parseUsbasketBirthDate("Dec.9, 1996"), "1996-12-09");
+  });
+
+  it("parses birthDate from authenticated profile HTML (raw markup, not cheerio text)", () => {
+    const html =
+      '<div>Dec.9, 1996<br/>Full name: Haywood L. Highsmith<br/></div>';
+    const bio = parsePlayerBioFromHtml(html, "345545", "Haywood Highsmith");
+    assert.equal(bio.birthDate, "1996-12-09");
+  });
+
+  it("ignores Player-{id} placeholder fallbacks and reads profile title", () => {
+    const html =
+      '<h1 class="player-title pltitlebigger">HADI ABUZGAYA basketball player profile</h1>';
+    const bio = parsePlayerBioFromHtml(html, "342752", "Player-342752");
+    assert.equal(bio.displayName, "Hadi Abuzgaya");
   });
 
   it("matches BallDontLie candidates by name and birthDate", () => {
@@ -117,6 +212,19 @@ describe("player bio parsing", () => {
     assert.equal(matchBdlExternalId("Darius Acuff", null, lookup), null);
   });
 
+  it("does not link external sources on name alone without birthDate", () => {
+    const lookup = buildBdlLookup([
+      {
+        playerId: 4830,
+        externalId: "1846",
+        displayName: "Derrick Brown",
+        birthDate: "1987-09-08",
+        seasons: [],
+      },
+    ]);
+    assert.equal(matchExternalId("Derrick Brown", null, lookup), null);
+  });
+
   it("rejects cross-source link when only name matches wrong era", () => {
     const lookup = buildBdlLookup([
       {
@@ -128,10 +236,39 @@ describe("player bio parsing", () => {
       },
     ]);
     assert.equal(
-      matchExternalId("Chris Cooper", null, lookup, ["2010-11", "2011-12"]),
+      matchExternalId("Chris Cooper", null, lookup),
+      null,
+    );
+    assert.equal(
+      matchExternalId("Chris Cooper", "1990-01-17", lookup),
       null,
     );
     assert.ok(isPlausibleCollegeAge("1990-01-17", ["2010-11", "2011-12"]));
     assert.ok(!isPlausibleCollegeAge("1926-09-29", ["2010-11", "2011-12"]));
+  });
+});
+
+describe("CCAA team aliases", () => {
+  it("normalizes Langara team labels", () => {
+    const langara = normalizeUsportsTeam("Langara");
+    assert.equal(langara.slug, "langara");
+    assert.equal(langara.name, "Langara");
+  });
+
+  it("keeps Douglas and Douglas College as separate canonical teams when unaliased", () => {
+    const douglas = normalizeUsportsTeam("Douglas");
+    assert.equal(douglas.slug, "douglas");
+  });
+
+  it("rejects known non-CCAA usbasket team labels", () => {
+    assert.equal(isValidUsportsTeamName("Benedict"), false);
+    assert.equal(isValidUsportsTeamName("Big Bend CC"), false);
+    assert.equal(isValidUsportsTeamName("Langara"), true);
+    assert.equal(isValidUsportsTeamName("Keyano"), true);
+    assert.equal(isValidUsportsTeamName("Keyano College"), true);
+    assert.equal(normalizeUsportsTeam("Keyano College").slug, "keyano");
+    assert.equal(normalizeUsportsTeam("Keyano College").name, "Keyano");
+    assert.equal(isValidUsportsTeamName("College Montmorency"), true);
+    assert.equal(normalizeUsportsTeam("College Montmorency").slug, "montmorency");
   });
 });

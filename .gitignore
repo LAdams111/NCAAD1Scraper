@@ -144,6 +144,14 @@ vite.config.ts.timestamp-*
 
 # Scraper runtime artifacts
 ncaa-*.cache.json
+usports-*.cache.json
+ccaa-*.cache.json
 scrape-ncaa-backfill.checkpoint.json
+scrape-ncaa-d2-backfill*.checkpoint.json
+scrape-usports-backfill*.checkpoint.json
+scrape-ccaa-backfill*.checkpoint.json
 scrape-ncaa-backfill.log
+scrape-ncaa-d2-backfill*.log
+scrape-usports-backfill*.log
+scrape-ccaa-backfill*.log
 tmp-*.html

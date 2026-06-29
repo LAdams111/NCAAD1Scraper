@@ -1,7 +1,7 @@
 {
-  "name": "scraper-ncaa-d1",
+  "name": "scraper-ccaa",
   "version": "1.0.0",
-  "description": "NCAA Division I men's basketball player-season scraper for Hoop Central via usbasket.com",
+  "description": "CCAA men's basketball player-season scraper for Hoop Central via usbasket.com",
   "type": "module",
   "main": "dist/index.js",
   "engines": {
@@ -16,7 +16,18 @@
     "start": "node dist/index.js",
     "scrape": "node dist/index.js",
     "scrape:backfill": "node dist/index.js --backfill",
-    "scrape:dry-run": "node dist/index.js --dry-run"
+    "scrape:backfill:shard0": "node dist/index.js --backfill --shard 0/2",
+    "scrape:backfill:shard1": "node dist/index.js --backfill --shard 1/2",
+    "scrape:backfill:shard0:4": "node dist/index.js --backfill --shard 0/4",
+    "scrape:backfill:shard1:4": "node dist/index.js --backfill --shard 1/4",
+    "scrape:backfill:shard2:4": "node dist/index.js --backfill --shard 2/4",
+    "scrape:backfill:shard3:4": "node dist/index.js --backfill --shard 3/4",
+    "scrape:dry-run": "node dist/index.js --dry-run",
+    "repair:d2-links:scan": "node scripts/repair-d2-links.mjs --scan --fetch-dob",
+    "repair:d2-links:apply": "node scripts/repair-d2-links.mjs --apply",
+    "repair:ccaa-profiles": "node scripts/repair-ccaa-profiles.mjs",
+    "patch:ccaa-names": "node scripts/patch-ccaa-cache-names.mjs",
+    "generate:ccaa-team-aliases": "node scripts/generate-ccaa-team-aliases.mjs"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

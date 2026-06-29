@@ -52,6 +52,26 @@ function extractBirthDateFromText(text: string): string | null {
   return null;
 }
 
+/** Authenticated usbasket pages redact DOB in cheerio body text but leave it in raw HTML. */
+function extractBirthDateFromHtml(html: string): string | null {
+  const profileLine =
+    /([A-Za-z]+\.?\s*\d{1,2},\s*\d{4})\s*<br\s*\/?>\s*[\r\n]*\s*Full name:/i.exec(html);
+  if (profileLine) {
+    const parsed = parseUsbasketBirthDate(profileLine[1]);
+    if (parsed) return parsed;
+  }
+
+  const anchorDob = />([A-Za-z]+\.?\s*\d{1,2},\s*\d{4})<\/a>\s*<span class="testdv">\s*in/i.exec(
+    html,
+  );
+  if (anchorDob) {
+    const parsed = parseUsbasketBirthDate(anchorDob[1]);
+    if (parsed) return parsed;
+  }
+
+  return extractBirthDateFromText(html);
+}
+
 function extractHometown(text: string): string | null {
   const bornIn = /born in\s+([^.<]+?)(?:\.|\s+He\s|\s+She\s|$)/i.exec(text);
   if (bornIn) return bornIn[1].replace(/\s+/g, " ").trim();
@@ -101,13 +121,20 @@ function titleCaseName(name: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function extractDisplayName(html: string, playerId: string, fallback?: string): string {
-  if (fallback?.trim()) return fallback.trim();
+export function isPlaceholderDisplayName(name: string | null | undefined): boolean {
+  if (!name?.trim()) return true;
+  return /^Player[- ]\d+$/i.test(name.trim());
+}
 
+function extractDisplayName(html: string, playerId: string, fallback?: string): string {
   const titleMatch = /<h1[^>]*class="[^"]*player-title[^"]*"[^>]*>([^<]+)/i.exec(html);
   if (titleMatch) {
     const raw = titleMatch[1].replace(/basketball player profile/i, "").trim();
     if (raw) return titleCaseName(raw);
+  }
+
+  if (fallback?.trim() && !isPlaceholderDisplayName(fallback)) {
+    return fallback.trim();
   }
 
   return `Player ${playerId}`;
@@ -135,7 +162,7 @@ export function parsePlayerBioFromHtml(
   return {
     playerId,
     displayName,
-    birthDate: extractBirthDateFromText(combined),
+    birthDate: extractBirthDateFromHtml(html) ?? extractBirthDateFromText(combined),
     position,
     heightCm: extractHeightCm(combined),
     weightKg: extractWeightKg(combined),

@@ -1,4 +1,5 @@
 import { load } from "cheerio";
+import { NCAA_USBASKET_TAG, NCAA_USBASKET_TAGS } from "../division.js";
 import type { NcaaSeasonRow, UsbasketIndexRow } from "../types.js";
 import {
   calcPct,
@@ -55,6 +56,37 @@ export function indexRowToSeasonRow(
   };
 }
 
+/** CCAA index often lists team roster with Games=0 — still create a placeholder season row. */
+export function createZeroStatSeasonRow(teamName: string, seasonLabel: string): NcaaSeasonRow {
+  const cleaned = teamName.replace(/&quote;/g, "'").trim();
+  return {
+    seasonLabel,
+    teamName: cleaned,
+    teamAbbreviation: teamAbbreviation(cleaned),
+    gamesPlayed: 0,
+    pointsPerGame: 0,
+    reboundsPerGame: 0,
+    assistsPerGame: 0,
+    stealsPerGame: 0,
+    blocksPerGame: 0,
+    fieldGoalPct: null,
+    threePointPct: null,
+  };
+}
+
+export function indexRowToPlaceholderSeasonRow(
+  row: UsbasketIndexRow,
+  seasonLabel: string,
+): NcaaSeasonRow | null {
+  const teamName = row.TEAMNAME.replace(/&quote;/g, "'").trim();
+  if (!teamName) return null;
+  return createZeroStatSeasonRow(teamName, seasonLabel);
+}
+
+function seasonHasStats(season: NcaaSeasonRow): boolean {
+  return season.gamesPlayed > 0 || season.pointsPerGame > 0;
+}
+
 export function parseSeasonRowsFromIndexData(
   rows: UsbasketIndexRow[],
   defaultSeasonLabel: string,
@@ -76,7 +108,8 @@ export function parseSeasonRowsFromIndexData(
       if (fromRow) label = fromRow;
     }
 
-    const season = indexRowToSeasonRow(row, label);
+    const season =
+      indexRowToSeasonRow(row, label) ?? indexRowToPlaceholderSeasonRow(row, label);
     if (!season) continue;
 
     results.push({
@@ -90,9 +123,41 @@ export function parseSeasonRowsFromIndexData(
   return results;
 }
 
+function htmlMatchesLeagueTag(html: string, tags: readonly string[] = NCAA_USBASKET_TAGS): boolean {
+  const lower = html.toLowerCase();
+  return tags.some((tag) => lower.includes(tag.toLowerCase()));
+}
+
+function headingMatchesLeagueTag(
+  headingText: string,
+  tags: readonly string[] = NCAA_USBASKET_TAGS,
+): boolean {
+  const lower = headingText.toLowerCase();
+  return tags.some((tag) => lower.includes(tag.toLowerCase()));
+}
+
+function findAveragesRow($: ReturnType<typeof load>, summaryTable: ReturnType<ReturnType<typeof load>>) {
+  const averagesHeader = summaryTable
+    .find("tr")
+    .filter((__, tr) => /AVERAGES?/i.test($(tr).text()))
+    .first();
+  if (!averagesHeader.length) return averagesHeader;
+
+  for (const rowClass of ["my_pStats1", "my_pStats2"] as const) {
+    const row = averagesHeader.nextAll(`tr.${rowClass}`).first();
+    if (row.length) return row;
+  }
+
+  return averagesHeader.nextAll("tr").first();
+}
+
 /** Parse one usbasket stats block (profile page or PlayerStatsAjax HTML). */
-export function parseNcaaSeasonFromStatsHtml(html: string): NcaaSeasonRow | null {
-  if (!html || html === "No Data" || !/NCAA1/i.test(html)) return null;
+export function parseNcaaSeasonFromStatsHtml(
+  html: string,
+  usbasketTag: string | readonly string[] = NCAA_USBASKET_TAGS,
+): NcaaSeasonRow | null {
+  const tags = typeof usbasketTag === "string" ? [usbasketTag] : usbasketTag;
+  if (!html || html === "No Data" || !htmlMatchesLeagueTag(html, tags)) return null;
 
   const $ = load(html);
   const headingText = $("h4.plstats-head, h4").first().text();
@@ -105,15 +170,8 @@ export function parseNcaaSeasonFromStatsHtml(html: string): NcaaSeasonRow | null
   const summaryTable = $("table.my_Title").first();
   if (!summaryTable.length) return null;
 
-  const averagesRow = summaryTable
-    .find("tr")
-    .filter((__, tr) => /AVERAGES?/i.test($(tr).text()))
-    .first()
-    .nextAll("tr.my_pStats1")
-    .first();
-
+  const averagesRow = findAveragesRow($, summaryTable);
   if (!averagesRow.length) return null;
-
   const cells = averagesRow
     .find("td")
     .map((_i, td) => $(td).text().trim())
@@ -149,14 +207,18 @@ export function parseNcaaSeasonFromStatsHtml(html: string): NcaaSeasonRow | null
   };
 }
 
-/** Parse every NCAA1 season block embedded in a profile page. */
-export function parseSeasonRowsFromPlayerHtml(html: string): NcaaSeasonRow[] {
+/** Parse every matching league season block embedded in a player profile page. */
+export function parseSeasonRowsFromPlayerHtml(
+  html: string,
+  usbasketTag: string | readonly string[] = NCAA_USBASKET_TAGS,
+): NcaaSeasonRow[] {
+  const usbasketTags = typeof usbasketTag === "string" ? [usbasketTag] : usbasketTag;
   const $ = load(html);
   const rows: NcaaSeasonRow[] = [];
 
   $("h4.plstats-head, h4").each((_, heading) => {
     const headingText = $(heading).text();
-    if (!/NCAA1/i.test(headingText)) return;
+    if (!headingMatchesLeagueTag(headingText, usbasketTags)) return;
 
     const container = $(heading).nextAll(".dvgamesstats").first();
     const fragment =
@@ -164,13 +226,12 @@ export function parseSeasonRowsFromPlayerHtml(html: string): NcaaSeasonRow[] {
         ? `${$.html(heading)}${$.html(container)}`
         : `${$.html(heading)}${$.html($(heading).nextAll("table.my_Title").first())}`;
 
-    const season = parseNcaaSeasonFromStatsHtml(fragment);
+    const season = parseNcaaSeasonFromStatsHtml(fragment, usbasketTags);
     if (season) rows.push(season);
   });
 
   return dedupeSeasonRows(rows);
 }
-
 export function listProfileStatsSeasonParams(html: string, playerId: string): string[] {
   const pattern = new RegExp(
     `loadStatsData\\('${playerId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}','([^']+)'\\)`,
@@ -187,7 +248,14 @@ export function mergeSeasonRows(
   for (const group of groups) {
     for (const season of group) {
       const key = `${season.seasonLabel}:${season.teamName}`;
-      byKey.set(key, season);
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, season);
+        continue;
+      }
+      if (seasonHasStats(season) && !seasonHasStats(existing)) {
+        byKey.set(key, season);
+      }
     }
   }
 
@@ -198,17 +266,189 @@ function dedupeSeasonRows(rows: NcaaSeasonRow[]): NcaaSeasonRow[] {
   return mergeSeasonRows(rows);
 }
 
-/** Fetch every NCAA1 season usbasket exposes on a player profile (index + AJAX). */
+function stripHtmlText(value: string): string {
+  return value
+    .replace(/&quote;/g, "'")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function careerSeasonLabel(rawSeason: string): string | null {
+  const trimmed = rawSeason.trim();
+  const normalized = normalizeSeasonLabel(trimmed);
+  if (normalized) return normalized;
+
+  if (/^\d{4}$/.test(trimmed)) {
+    return seasonLabelFromYearParam(trimmed);
+  }
+
+  return null;
+}
+
+function parseCareerStatNumber(text: string, pattern: RegExp): number | null {
+  const match = pattern.exec(text);
+  if (!match) return null;
+  const parsed = Number.parseFloat(match[1]);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function parseCareerPct(text: string, patterns: RegExp[]): number | null {
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const parsed = Number.parseFloat(match[1]);
+    if (!Number.isNaN(parsed)) return round1(parsed);
+  }
+  return null;
+}
+
+function leagueTagMatchesCareerLeague(leagueText: string, leagueTag: string): boolean {
+  const normalized = leagueText.trim().toLowerCase();
+  const target = leagueTag.trim().toLowerCase();
+  return normalized === target || normalized.startsWith(`${target},`) || normalized.includes(` ${target}`);
+}
+
+/** Parse subscriber "Year-By-Year Career" lines on player profile pages. */
+export function parseCareerYearByYearSeasons(
+  html: string,
+  leagueTag: string = NCAA_USBASKET_TAG,
+): NcaaSeasonRow[] {
+  const marker = "Year-By-Year Career";
+  const start = html.indexOf(marker);
+  if (start < 0) return [];
+
+  const endCandidates = ["profile-head", "Awards/Achievements", "Awards & Achievements"];
+  let end = start + 20_000;
+  for (const candidate of endCandidates) {
+    const idx = html.indexOf(candidate, start + marker.length);
+    if (idx >= 0) end = Math.min(end, idx);
+  }
+
+  const section = html.slice(start, end);
+  const rows: NcaaSeasonRow[] = [];
+
+  for (const match of section.matchAll(/<b>(\d{4}(?:-\d{4})?):<\/b>([\s\S]*?)(?=<b>\d{4}|$)/gi)) {
+    const seasonLabel = careerSeasonLabel(match[1]);
+    if (!seasonLabel) continue;
+
+    const body = stripHtmlText(match[2]);
+    const metaMatch = /^(.+?)\(([^)]+)\)\s*(?::\s*(.*))?$/i.exec(body);
+    if (!metaMatch) continue;
+
+    const teamName = metaMatch[1].replace(/&quote;/g, "'").trim();
+    const leagueText = metaMatch[2].trim();
+    const statsText = (metaMatch[3] ?? "").trim();
+    if (!teamName || !leagueTagMatchesCareerLeague(leagueText, leagueTag)) continue;
+
+    const pointsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*ppg/i);
+    const reboundsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*rpg/i);
+    const assistsPerGame = parseCareerStatNumber(statsText, /([\d.]+)\s*apg/i);
+
+    if (
+      pointsPerGame == null ||
+      reboundsPerGame == null ||
+      assistsPerGame == null
+    ) {
+      rows.push(createZeroStatSeasonRow(teamName, seasonLabel));
+      continue;
+    }
+
+    const gamesMatch = /(\d+)\s+games?\b/i.exec(statsText);
+    const gamesPlayed = gamesMatch ? Number.parseInt(gamesMatch[1], 10) : 1;
+    if (!gamesPlayed || gamesPlayed <= 0) {
+      rows.push(createZeroStatSeasonRow(teamName, seasonLabel));
+      continue;
+    }
+
+    rows.push({
+      seasonLabel,
+      teamName,
+      teamAbbreviation: teamAbbreviation(teamName),
+      gamesPlayed,
+      pointsPerGame: round1(pointsPerGame),
+      reboundsPerGame: round1(reboundsPerGame),
+      assistsPerGame: round1(assistsPerGame),
+      stealsPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*spg/i) ?? 0),
+      blocksPerGame: round1(parseCareerStatNumber(statsText, /([\d.]+)\s*bpg/i) ?? 0),
+      fieldGoalPct: parseCareerPct(statsText, [/FGP:?\s*([\d.]+)%/i, /FG:\s*([\d.]+)%/i]),
+      threePointPct: parseCareerPct(statsText, [/3FGP:?\s*([\d.]+)%/i, /3PT:?\s*([\d.]+)%/i, /3Pt:?\s*([\d.]+)%/i]),
+    });
+  }
+
+  return dedupeSeasonRows(rows);
+}
+
+function profileSeasonLabelFromHtml(html: string): string | null {
+  const headingMatch = /Season:\s*([0-9]{4}-[0-9]{4})/i.exec(html);
+  if (headingMatch) {
+    return normalizeSeasonLabel(headingMatch[1]);
+  }
+
+  const currentMatch = /TMP_Curr_season:\s*(\d{4})/i.exec(html);
+  if (currentMatch) {
+    return seasonLabelFromYearParam(currentMatch[1]);
+  }
+
+  return null;
+}
+
+/** Profile summary lines like "most recently played at Keyano in the CCAA". */
+export function parseCcaaProfileAffiliations(
+  html: string,
+  leagueTag: string = NCAA_USBASKET_TAG,
+): NcaaSeasonRow[] {
+  if (!html.toLowerCase().includes(leagueTag.toLowerCase())) return [];
+
+  const recentMatch =
+    /most recently played at\s*<a[^>]*>([^<]+)<\/a>\s*in the CCAA/i.exec(html);
+  if (!recentMatch) return [];
+
+  const teamName = stripHtmlText(recentMatch[1]);
+  const seasonLabel = profileSeasonLabelFromHtml(html);
+  if (!teamName || !seasonLabel) return [];
+
+  return [createZeroStatSeasonRow(teamName, seasonLabel)];
+}
+
+function seasonLabelFromParam(param: string): string | null {
+  const normalized = normalizeSeasonLabel(param);
+  if (normalized) return normalized;
+  if (/^\d{4}$/.test(param.trim())) {
+    return seasonLabelFromYearParam(param.trim());
+  }
+  return null;
+}
+
+/** Fetch every matching NCAA season usbasket exposes on a player profile (index + AJAX). */
 export async function collectAllNcaaSeasons(
   client: UsbasketClient,
   playerId: string,
   profileHtml: string,
 ): Promise<NcaaSeasonRow[]> {
   const embedded = parseSeasonRowsFromPlayerHtml(profileHtml);
+  const career = parseCareerYearByYearSeasons(profileHtml);
+  const affiliations = parseCcaaProfileAffiliations(profileHtml);
+  const staticRows = mergeSeasonRows(affiliations, career, embedded);
+
+  if (staticRows.some(seasonHasStats)) {
+    return staticRows;
+  }
+
   const seasonParams = listProfileStatsSeasonParams(profileHtml, playerId);
+  const paramsToFetch = seasonParams.filter((seasonParam) => {
+    const label = seasonLabelFromParam(seasonParam);
+    if (!label) return true;
+    return !staticRows.some((season) => season.seasonLabel === label && seasonHasStats(season));
+  });
+
+  if (paramsToFetch.length === 0) {
+    return staticRows;
+  }
+
   const fetched: NcaaSeasonRow[] = [];
 
-  for (const seasonParam of seasonParams) {
+  for (const seasonParam of paramsToFetch) {
     try {
       const fragment = await client.fetchPlayerStatsAjax(playerId, seasonParam);
       const season = parseNcaaSeasonFromStatsHtml(fragment);
@@ -219,7 +459,7 @@ export async function collectAllNcaaSeasons(
     }
   }
 
-  return mergeSeasonRows(embedded, fetched);
+  return mergeSeasonRows(staticRows, fetched);
 }
 
 function parsePctCell(value: string | undefined): number | null {

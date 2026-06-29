@@ -1,5 +1,9 @@
-import type { HcPlayerStatus, NcaaPlayerBio } from "../types.js";
 import { NCAA_SOURCE } from "../types.js";
+import type { HcPlayerStatus, NcaaPlayerBio } from "../types.js";
+import {
+  ALL_USBASKET_NCAA_SOURCES,
+  siblingUsbasketSources,
+} from "../utils/usbasketSources.js";
 import { loadLinkCache, normalizeName, saveLinkCache } from "./linkCache.js";
 
 export interface LinkTarget {
@@ -17,7 +21,11 @@ export interface LinkResolver {
   rememberLink(playerId: string, target: LinkTarget): void;
 }
 
-export const LINK_SOURCES = ["balldontlie", "basketball-reference-gleague"] as const;
+/** Non-usbasket sources — require exact birthDate match on the scraped player. */
+export const EXTERNAL_LINK_SOURCES = ["balldontlie", "basketball-reference-gleague"] as const;
+
+/** @deprecated Use EXTERNAL_LINK_SOURCES */
+export const LINK_SOURCES = EXTERNAL_LINK_SOURCES;
 
 /** Would this birth year plausibly play in these college season labels? */
 export function isPlausibleCollegeAge(
@@ -52,31 +60,23 @@ export function buildNameLookup(players: HcPlayerStatus[]): Map<string, HcPlayer
   return byName;
 }
 
+/**
+ * Match an external (non-usbasket) identity only when scraped birthDate exactly matches.
+ * Never link on name alone — prevents NBA/college namesake collisions.
+ */
 export function matchExternalId(
   displayName: string,
   birthDate: string | null,
   byName: Map<string, HcPlayerStatus[]>,
-  seasonLabels: string[] = [],
 ): string | null {
+  if (!birthDate) return null;
+
   const key = normalizeName(displayName);
   const candidates = byName.get(key);
   if (!candidates?.length) return null;
 
-  if (birthDate) {
-    const dobMatches = candidates.filter((c) => c.birthDate === birthDate);
-    if (dobMatches.length === 1) return dobMatches[0].externalId;
-    if (dobMatches.length > 1) return null;
-  }
-
-  if (seasonLabels.length) {
-    const plausible = candidates.filter(
-      (c) => c.birthDate && isPlausibleCollegeAge(c.birthDate, seasonLabels),
-    );
-    if (plausible.length === 1) return plausible[0].externalId;
-    return null;
-  }
-
-  if (candidates.length === 1) return candidates[0].externalId;
+  const dobMatches = candidates.filter((c) => c.birthDate === birthDate);
+  if (dobMatches.length === 1) return dobMatches[0].externalId;
   return null;
 }
 
@@ -94,18 +94,16 @@ function cachedLinkIsValid(
   target: LinkTarget,
   displayName: string,
   birthDate: string | null,
-  seasonLabels: string[],
   byName: Map<string, HcPlayerStatus[]>,
 ): boolean {
+  if (ALL_USBASKET_NCAA_SOURCES.includes(target.source as (typeof ALL_USBASKET_NCAA_SOURCES)[number])) {
+    return true;
+  }
+
   const candidate = findCandidate(byName, displayName, target.externalId);
   if (!candidate) return false;
-  if (birthDate) return candidate.birthDate === birthDate;
-  if (seasonLabels.length) {
-    return candidate.birthDate
-      ? isPlausibleCollegeAge(candidate.birthDate, seasonLabels)
-      : false;
-  }
-  return true;
+  if (!birthDate) return false;
+  return candidate.birthDate === birthDate;
 }
 
 function parseCachedLink(raw: string): LinkTarget | null {
@@ -116,6 +114,20 @@ function parseCachedLink(raw: string): LinkTarget | null {
   }
 
   return { source: "balldontlie", externalId: raw };
+}
+
+async function findUsbasketIdentityByPlayerId(
+  playerId: string,
+  loadCompletionStatus: (source: string) => Promise<HcPlayerStatus[]>,
+  preferSources: readonly string[],
+): Promise<LinkTarget | null> {
+  for (const source of preferSources) {
+    const players = await loadCompletionStatus(source);
+    if (players.some((player) => player.externalId === playerId)) {
+      return { source, externalId: playerId };
+    }
+  }
+  return null;
 }
 
 export function createLinkResolver(options: {
@@ -136,23 +148,39 @@ export function createLinkResolver(options: {
   }
 
   return {
-    async resolveLinkTarget(playerId, displayName, birthDate, seasonLabels = []) {
+    async resolveLinkTarget(playerId, displayName, birthDate, _seasonLabels = []) {
       const cached = linkCache.mappings[playerId];
       if (cached) {
         const target = parseCachedLink(cached);
         if (target) {
-          const lookup = await getLookup(target.source);
-          if (cachedLinkIsValid(target, displayName, birthDate, seasonLabels, lookup)) {
-            return target;
+          if (ALL_USBASKET_NCAA_SOURCES.includes(target.source as (typeof ALL_USBASKET_NCAA_SOURCES)[number])) {
+            if (target.externalId === playerId) return target;
+            delete linkCache.mappings[playerId];
+            saveLinkCache(options.linkCachePath, linkCache);
+          } else {
+            const lookup = await getLookup(target.source);
+            if (cachedLinkIsValid(target, displayName, birthDate, lookup)) {
+              return target;
+            }
+            delete linkCache.mappings[playerId];
+            saveLinkCache(options.linkCachePath, linkCache);
           }
-          delete linkCache.mappings[playerId];
-          saveLinkCache(options.linkCachePath, linkCache);
         }
       }
 
-      for (const source of LINK_SOURCES) {
+      // Same usbasket numeric ID across D1/D2/etc. → one website profile.
+      const usbasketHit = await findUsbasketIdentityByPlayerId(
+        playerId,
+        options.loadCompletionStatus,
+        siblingUsbasketSources(NCAA_SOURCE),
+      );
+      if (usbasketHit) return usbasketHit;
+
+      if (!birthDate) return null;
+
+      for (const source of EXTERNAL_LINK_SOURCES) {
         const lookup = await getLookup(source);
-        const externalId = matchExternalId(displayName, birthDate, lookup, seasonLabels);
+        const externalId = matchExternalId(displayName, birthDate, lookup);
         if (externalId) return { source, externalId };
       }
 

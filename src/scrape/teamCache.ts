@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { nameToSlug } from "../utils/teams.js";
 
-export const DEFAULT_TEAM_CACHE = "ncaa-teams.cache.json";
+export const DEFAULT_TEAM_CACHE = "ccaa-teams.cache.json";
 
 export interface TeamCacheEntry {
   abbrev: string;
