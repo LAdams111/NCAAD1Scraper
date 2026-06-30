@@ -156,6 +156,7 @@ scrape-usports-backfill*.log
 scrape-ccaa-backfill*.log
 usbasket-global-*.cache.json
 usbasket-global-discovery*.checkpoint.json
+usbasket-global-discovery-year-params.cache.json
 scrape-career-backfill*.checkpoint.json
 scrape-career-backfill*.log
 career-to-hc*.cache.json

@@ -17,6 +17,14 @@ import {
   taskKey,
   USBASKET_MENS_SEGMENTS,
 } from "../discover/segments.js";
+import {
+  emptyYearParamsCache,
+  getCachedYearParams,
+  setCachedYearParams,
+} from "../discover/yearParamsCache.js";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 describe("global discovery segments", () => {
   it("builds stable task keys", () => {
@@ -77,6 +85,22 @@ describe("global discovery tasks", () => {
     });
     assert.equal(tasks.length, 2);
     assert.equal(tasks[0]?.key, "usbasket:CCAA:2024");
+  });
+});
+
+describe("global discovery year params cache", () => {
+  it("persists resolved season params incrementally", () => {
+    const dir = mkdtempSync(join(tmpdir(), "discover-years-"));
+    const path = join(dir, "year-params.cache.json");
+    const cache = emptyYearParamsCache();
+
+    setCachedYearParams(cache, path, "usbasket:NCAA1", ["2024", "2023"]);
+    assert.deepEqual(getCachedYearParams(cache, "usbasket:NCAA1"), ["2024", "2023"]);
+    assert.equal(getCachedYearParams(cache, "usbasket:NBA"), null);
+
+    const reloaded = JSON.parse(readFileSync(path, "utf8"));
+    assert.deepEqual(reloaded.segments["usbasket:NCAA1"], ["2024", "2023"]);
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 

@@ -32,6 +32,15 @@ import {
   taskKey,
   type DiscoverSegment,
 } from "./segments.js";
+import {
+  DEFAULT_YEAR_PARAMS_CACHE,
+  emptyYearParamsCache,
+  getCachedYearParams,
+  loadYearParamsCache,
+  saveYearParamsCache,
+  setCachedYearParams,
+  type YearParamsCache,
+} from "./yearParamsCache.js";
 
 export interface GlobalDiscoveryOptions {
   resume: boolean;
@@ -109,7 +118,7 @@ async function resolveYearParamsForSegment(
   client: UsbasketClient,
   segment: DiscoverSegment,
 ): Promise<string[]> {
-  const bootstrapYear = segment.host === "usbasket" ? "2024" : "2024";
+  const bootstrapYear = "2024";
   try {
     const html = await client.fetchHtml(
       client.segmentIndexUrl(segment.id, bootstrapYear, { host: segment.host }),
@@ -118,9 +127,66 @@ async function resolveYearParamsForSegment(
     );
     const years = listSeasonYearParams(html);
     return years.length ? years : [...FALLBACK_YEAR_PARAMS];
-  } catch {
+  } catch (error) {
+    if (error instanceof UsbasketRateLimitError) throw error;
     return [...FALLBACK_YEAR_PARAMS];
   }
+}
+
+async function loadEurobasketCountries(
+  client: UsbasketClient,
+  yearParamsCache: YearParamsCache,
+  yearParamsCachePath: string,
+  fresh: boolean,
+): Promise<DiscoverSegment[]> {
+  if (!fresh && yearParamsCache.eurobasketCountryIds.length) {
+    console.log(
+      `[discover] Using cached EuroBasket country list (${yearParamsCache.eurobasketCountryIds.length})`,
+    );
+    return yearParamsCache.eurobasketCountryIds.map((id) => ({
+      id,
+      host: "eurobasket" as const,
+      label: id.replace(/-/g, " "),
+    }));
+  }
+
+  console.log("[discover] Loading EuroBasket country list...");
+  const bootstrapHtml = await client.fetchHtml(
+    "https://www.eurobasket.com/Spain/basketball-Players.aspx?Year=2024",
+    8,
+    true,
+  );
+  const countries = parseEurobasketCountriesFromHtml(bootstrapHtml);
+  yearParamsCache.eurobasketCountryIds = countries.map((segment) => segment.id);
+  saveYearParamsCache(yearParamsCachePath, yearParamsCache);
+  console.log(`[discover] Found ${countries.length} EuroBasket countries`);
+  return countries;
+}
+
+async function resolveYearParamsBySegment(
+  client: UsbasketClient,
+  segments: DiscoverSegment[],
+  yearParamsCache: YearParamsCache,
+  yearParamsCachePath: string,
+): Promise<Map<string, string[]>> {
+  const yearParamsBySegment = new Map<string, string[]>();
+
+  for (const segment of segments) {
+    const key = segmentKey(segment, false);
+    const cached = getCachedYearParams(yearParamsCache, key);
+    if (cached) {
+      yearParamsBySegment.set(key, cached);
+      console.log(`[discover] ${key}: ${cached.length} season(s) (cached)`);
+      continue;
+    }
+
+    const years = await resolveYearParamsForSegment(client, segment);
+    yearParamsBySegment.set(key, years);
+    setCachedYearParams(yearParamsCache, yearParamsCachePath, key, years);
+    console.log(`[discover] ${key}: ${years.length} season(s)`);
+  }
+
+  return yearParamsBySegment;
 }
 
 function ingestIndexPage(
@@ -175,16 +241,20 @@ export async function runGlobalDiscovery(
   );
   await client.ensureLoggedIn(config.usbasketEmail, config.usbasketPassword);
 
+  const yearParamsCachePath = DEFAULT_YEAR_PARAMS_CACHE;
+  const yearParamsCache =
+    options.fresh || !options.resume
+      ? emptyYearParamsCache()
+      : (loadYearParamsCache(yearParamsCachePath) ?? emptyYearParamsCache());
+
   let eurobasketCountries: DiscoverSegment[] = [];
   if (options.includeEurobasket) {
-    console.log("[discover] Loading EuroBasket country list...");
-    const bootstrapHtml = await client.fetchHtml(
-      "https://www.eurobasket.com/Spain/basketball-Players.aspx?Year=2024",
-      8,
-      true,
+    eurobasketCountries = await loadEurobasketCountries(
+      client,
+      yearParamsCache,
+      yearParamsCachePath,
+      options.fresh || !options.resume,
     );
-    eurobasketCountries = parseEurobasketCountriesFromHtml(bootstrapHtml);
-    console.log(`[discover] Found ${eurobasketCountries.length} EuroBasket countries`);
   }
 
   const segments = resolveDiscoverSegments({
@@ -199,12 +269,12 @@ export async function runGlobalDiscovery(
 
   console.log(`[discover] Segments to crawl: ${segments.length}`);
 
-  const yearParamsBySegment = new Map<string, string[]>();
-  for (const segment of segments) {
-    const years = await resolveYearParamsForSegment(client, segment);
-    yearParamsBySegment.set(segmentKey(segment, false), years);
-    console.log(`[discover] ${segmentKey(segment, false)}: ${years.length} season(s)`);
-  }
+  const yearParamsBySegment = await resolveYearParamsBySegment(
+    client,
+    segments,
+    yearParamsCache,
+    yearParamsCachePath,
+  );
 
   const allTasks = buildDiscoveryTasks({
     segments,

@@ -134,6 +134,15 @@ function parseArgs(argv: string[]): {
 }
 
 async function main(): Promise<void> {
+  process.on("unhandledRejection", (reason) => {
+    console.error("[discover] Unhandled rejection:", reason);
+    process.exit(1);
+  });
+  process.on("uncaughtException", (error) => {
+    console.error("[discover] Uncaught exception:", error);
+    process.exit(1);
+  });
+
   const args = parseArgs(process.argv.slice(2));
 
   if (args.showHelp) {
