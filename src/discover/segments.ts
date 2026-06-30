@@ -97,6 +97,11 @@ export function taskKey(segment: DiscoverSegment, yearParam: string, women: bool
   return `${segmentKey(segment, women)}:${yearParam}`;
 }
 
+/** Checkpoint marker for the extra index-page supplement pass (page 2+). */
+export function taskSupplementKey(taskKeyValue: string): string {
+  return `${taskKeyValue}:pages-supplement`;
+}
+
 export function resolveDiscoverSegments(options: {
   includeEurobasket: boolean;
   eurobasketCountries?: DiscoverSegment[];

@@ -202,4 +202,25 @@ describe("career profile parsing", () => {
     assert.equal(seasons[0]?.teamName, "Real Madrid");
     assert.equal(seasons[0]?.gamesPlayed, 12);
   });
+
+  it("prefers the visible plCareer tab over a redacted Year-By-Year block", () => {
+    const html = readFileSync("src/test/fixtures/player-career-veselin-304.html", "utf8");
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.ok(seasons.length >= 5);
+    assert.ok(seasons.some((s) => /Hebar Pazardzhik/i.test(s.teamName)));
+    assert.ok(seasons.every((s) => !/\*/.test(s.teamName)));
+    assert.ok(seasons.every((s) => s.leagueText !== "Unknown"));
+
+    const { records } = buildCareerSeasonRecords("304", "Veselin Veselinov", seasons);
+    assert.ok(records.length >= 5);
+    assert.ok(records.every((r) => r.teamSlug !== "unknown-team"));
+    assert.ok(records.every((r) => r.leagueSlug !== "unknown"));
+  });
+
+  it("skips redacted Year-By-Year lines when plCareer is absent", () => {
+    const html =
+      'Year-By-Year Career <b>2011-2012:</b> **** ******** (*******-******* League, starting five): ** games: *.*ppg profile-head';
+    const seasons = parseAllCareerYearByYearSeasons(html);
+    assert.equal(seasons.length, 0);
+  });
 });

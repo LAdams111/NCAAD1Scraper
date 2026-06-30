@@ -9,17 +9,16 @@ import {
   mergeDiscoveredPlayer,
   saveGlobalPlayerCache,
   saveGlobalSlugCache,
-  type GlobalPlayerCache,
-} from "../src/discover/globalCache.js";
+} from "../dist/discover/globalCache.js";
 
-function emptyCache(): GlobalPlayerCache {
+function emptyCache() {
   return { version: 1, players: {}, updatedAt: new Date().toISOString() };
 }
 
-function loadCache(path: string): GlobalPlayerCache | null {
+function loadCache(path) {
   if (!existsSync(path)) return null;
   try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as GlobalPlayerCache;
+    const raw = JSON.parse(readFileSync(path, "utf8"));
     if (raw.version !== 1 || typeof raw.players !== "object") return null;
     return raw;
   } catch {
@@ -27,7 +26,7 @@ function loadCache(path: string): GlobalPlayerCache | null {
   }
 }
 
-function mergeInto(target: GlobalPlayerCache, source: GlobalPlayerCache): void {
+function mergeInto(target, source) {
   for (const [playerId, entry] of Object.entries(source.players)) {
     for (const segment of entry.segments) {
       for (const src of entry.sources) {
@@ -37,9 +36,9 @@ function mergeInto(target: GlobalPlayerCache, source: GlobalPlayerCache): void {
   }
 }
 
-function main(): void {
+function main() {
   const merged = emptyCache();
-  const paths: string[] = ["usbasket-global-player-ids.cache.json"];
+  const paths = ["usbasket-global-player-ids.cache.json"];
 
   for (const name of readdirSync(".")) {
     if (/^usbasket-global-player-ids\.shard-\d+-of-\d+\.cache\.json$/.test(name)) {

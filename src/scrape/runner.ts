@@ -7,6 +7,7 @@ import type {
   CachedPlayerSeasons,
   HoopCentralIngestPayload,
   NcaaPlayerBio,
+  NcaaSeasonRow,
   ScrapeOptions,
   ScrapeSummary,
 } from "../types.js";
@@ -32,7 +33,7 @@ import {
   saveSeasonCache,
   seasonCacheNeedsRediscovery,
 } from "./discovery.js";
-import { buildBioPayload, createLinkResolver, type LinkResolver } from "./linking.js";
+import { buildBioPayload, bioToPlayerFields, createLinkResolver, type LinkResolver } from "./linking.js";
 import { parsePlayerBioFromHtml, isPlaceholderDisplayName } from "./playerMeta.js";
 import { filterValidUsportsSeasons, isNonCcaaTeamLabel, isValidUsportsTeamName, teamNameWasRewritten } from "../utils/usportsTeams.js";
 import {
@@ -43,7 +44,7 @@ import {
   seasonsHaveRealStats,
 } from "./playerSeason.js";
 import { loadSlugCache, saveSlugCache } from "./slugCache.js";
-import type { NcaaSeasonRow } from "../types.js";
+import { resolveJerseyFromRosters } from "../usbasket/rosterJersey.js";
 import {
   loadShardCheckpoint,
   playerBelongsToShard,
@@ -60,22 +61,6 @@ function collectPlayoffsBySeasonLabel(
 
 function formatSeasonLabels(seasons: NcaaSeasonRow[]): string {
   return seasons.map((season) => season.seasonLabel).join(", ");
-}
-
-function syntheticBio(
-  playerId: string,
-  displayName: string,
-  position: string | null,
-): NcaaPlayerBio {
-  return {
-    playerId,
-    displayName,
-    birthDate: null,
-    position,
-    heightCm: null,
-    weightKg: null,
-    hometown: null,
-  };
 }
 
 function playerQueuePriority(
@@ -208,16 +193,7 @@ async function processPlayer(
   let mergedSeasons = mergeSeasonRows(indexSeasons);
   let profileHtml: string | undefined;
 
-  const useIndexOnly =
-    options.backfill && cacheEntry && seasonsHaveRealStats(indexSeasons);
-
-  if (useIndexOnly) {
-    bio = syntheticBio(playerId, cacheEntry!.displayName, cacheEntry!.position);
-    console.log(
-      `[cache] ${bio.displayName}: ${mergedSeasons.length} season(s) from index` +
-        ` [${formatSeasonLabels(mergedSeasons)}]`,
-    );
-  } else {
+  {
     const html = await fetchPlayerHtml(client, options, playerId, displayName);
     profileHtml = html;
 
@@ -227,6 +203,15 @@ async function processPlayer(
       cacheEntry?.displayName,
       cacheEntry?.position ?? null,
     );
+
+    if (!bio.jerseyNumber && !options.useFixtures) {
+      const rosterJersey = await resolveJerseyFromRosters(
+        (url) => client.fetchHtml(url),
+        html,
+        playerId,
+      );
+      if (rosterJersey) bio.jerseyNumber = rosterJersey;
+    }
 
     profileSeasons = await collectAllNcaaSeasons(client, playerId, html);
     mergedSeasons = mergeSeasonRows(indexSeasons, profileSeasons);
@@ -269,7 +254,9 @@ async function processPlayer(
             : "profile";
       console.log(
         `[player] ${bio.displayName}: ${mergedSeasons.length} season(s) from ${source}` +
-          ` [${formatSeasonLabels(mergedSeasons)}]`,
+          ` [${formatSeasonLabels(mergedSeasons)}]` +
+          (bio.position ? ` · ${bio.position}` : "") +
+          (bio.jerseyNumber ? ` #${bio.jerseyNumber}` : ""),
       );
     }
   }
@@ -288,10 +275,7 @@ async function processPlayer(
 
   const resolvedName = resolveDisplayName(cacheEntry?.displayName, bio.displayName);
 
-  // Stats-only ingest: never send scraped or cached bio fields to Hoop Central.
-  const playerFields: HoopCentralIngestPayload["player"] = {
-    displayName: resolvedName,
-  };
+  const playerFields = bioToPlayerFields(bio, resolvedName);
 
   let linked = false;
   let hoopPlayerId: number | undefined;
@@ -311,7 +295,7 @@ async function processPlayer(
         `[dry-run] would link ${playerId} → ${linkTarget.source}:${linkTarget.externalId}`,
       );
     } else {
-      console.log(`[dry-run] would resolve or create profile for ${playerId} (stats only, no bio)`);
+      console.log(`[dry-run] would resolve or create profile for ${playerId}`);
     }
     console.log(JSON.stringify(linkPayload, null, 2));
     linked = Boolean(linkTarget);

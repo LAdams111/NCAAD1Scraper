@@ -12,6 +12,8 @@ Usage:
 Options:
   --resume               Skip completed segment/season tasks (default)
   --fresh                Ignore checkpoint and rebuild shard cache from scratch
+  --rescan-completed     Re-fetch completed tasks (full re-ingest)
+  --supplement-pagination  Only crawl page 2+ on completed tasks (safe add-on pass)
   --include-eurobasket   Also crawl eurobasket.com country player indexes
   --include-women        Also crawl women's indexes (?women=1)
   --segment <id>         Only crawl one segment (e.g. NCAA1, CCAA, Spain)
@@ -37,6 +39,8 @@ function parseArgs(argv: string[]): {
   showHelp: boolean;
   resume: boolean;
   fresh: boolean;
+  rescanCompleted: boolean;
+  supplementPagination: boolean;
   includeEurobasket: boolean;
   includeWomen: boolean;
   segmentFilter?: string;
@@ -47,6 +51,8 @@ function parseArgs(argv: string[]): {
   let showHelp = false;
   let resume = true;
   let fresh = false;
+  let rescanCompleted = false;
+  let supplementPagination = false;
   let includeEurobasket = false;
   let includeWomen = false;
   let segmentFilter: string | undefined;
@@ -67,6 +73,12 @@ function parseArgs(argv: string[]): {
       case "--fresh":
         fresh = true;
         resume = false;
+        break;
+      case "--rescan-completed":
+        rescanCompleted = true;
+        break;
+      case "--supplement-pagination":
+        supplementPagination = true;
         break;
       case "--include-eurobasket":
         includeEurobasket = true;
@@ -124,6 +136,8 @@ function parseArgs(argv: string[]): {
     showHelp,
     resume,
     fresh,
+    rescanCompleted,
+    supplementPagination,
     includeEurobasket,
     includeWomen,
     segmentFilter,

@@ -1,5 +1,6 @@
 import { NCAA_SOURCE } from "../types.js";
 import type { HcPlayerStatus, NcaaPlayerBio } from "../types.js";
+import type { HoopCentralIngestPayload } from "../types.js";
 import {
   ALL_USBASKET_NCAA_SOURCES,
   siblingUsbasketSources,
@@ -196,18 +197,43 @@ export function createLinkResolver(options: {
   };
 }
 
-/** Identity/link only — never sends scraped bio fields (hometown, height, etc.). */
+/** Scraped usbasket bio → player-bio ingest shape. */
+export function scrapedBioPlayerFields(bio: NcaaPlayerBio) {
+  return {
+    displayName: bio.displayName,
+    ...(bio.birthDate ? { birthDate: bio.birthDate } : {}),
+    ...(bio.position ? { position: bio.position } : {}),
+    ...(bio.jerseyNumber ? { jerseyNumber: bio.jerseyNumber } : {}),
+    ...(bio.heightCm != null ? { heightCm: bio.heightCm } : {}),
+    ...(bio.weightKg != null ? { weightKg: bio.weightKg } : {}),
+    ...(bio.hometown ? { hometown: bio.hometown } : {}),
+    ...(bio.country ? { country: bio.country } : {}),
+  };
+}
+
+/** Bio fields sent on each player-season row (no jersey — use player-bio for that). */
+export function bioToPlayerFields(
+  bio: NcaaPlayerBio,
+  displayName: string,
+): HoopCentralIngestPayload["player"] {
+  const player: HoopCentralIngestPayload["player"] = { displayName };
+  if (bio.birthDate) player.birthDate = bio.birthDate;
+  if (bio.position) player.position = bio.position;
+  if (bio.heightCm != null) player.heightCm = bio.heightCm;
+  if (bio.weightKg != null) player.weightKg = bio.weightKg;
+  if (bio.hometown) player.hometown = bio.hometown;
+  return player;
+}
+
 export function buildBioPayload(
-  bio: Pick<NcaaPlayerBio, "playerId" | "displayName">,
+  bio: NcaaPlayerBio,
   linkTo?: LinkTarget,
   source: string = NCAA_SOURCE,
 ) {
   return {
     source,
     externalId: bio.playerId,
-    player: {
-      displayName: bio.displayName,
-    },
+    player: scrapedBioPlayerFields(bio),
     ...(linkTo ? { linkTo } : {}),
   };
 }
@@ -218,19 +244,7 @@ export function buildCareerBioPayload(
   linkTo?: LinkTarget,
   source: string = NCAA_SOURCE,
 ) {
-  return {
-    source,
-    externalId: bio.playerId,
-    player: {
-      displayName: bio.displayName,
-      ...(bio.birthDate ? { birthDate: bio.birthDate } : {}),
-      ...(bio.position ? { position: bio.position } : {}),
-      ...(bio.heightCm != null ? { heightCm: bio.heightCm } : {}),
-      ...(bio.weightKg != null ? { weightKg: bio.weightKg } : {}),
-      ...(bio.hometown ? { hometown: bio.hometown } : {}),
-    },
-    ...(linkTo ? { linkTo } : {}),
-  };
+  return buildBioPayload(bio, linkTo, source);
 }
 
 /** @deprecated Use buildNameLookup */

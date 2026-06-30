@@ -663,6 +663,12 @@ function parseCareerLineMeta(body: string): CareerLineMeta | null {
   if (leagueText === "Unknown" && parenGroups.length === 0) {
     leagueText = inferCareerLeagueFromTeamName(teamName);
   }
+  if (
+    leagueText === "Unknown" &&
+    /\b(cup|league|challenge|euro|fiba|bcl)\b|eurocup|eurochallenge|champions league/i.test(head)
+  ) {
+    leagueText = head;
+  }
 
   return {
     teamName,
@@ -864,8 +870,105 @@ export function parseCareerYearByYearSeasons(
   return dedupeSeasonRows(rows);
 }
 
-/** Parse every Year-By-Year career line (no league filter) for career-hub routing. */
-export function parseAllCareerYearByYearSeasons(html: string): CareerSeasonRow[] {
+/** Subscriber pages duplicate a blurred/redacted career block — ignore masked text. */
+export function isRedactedCareerText(text: string | null | undefined): boolean {
+  const value = text?.trim();
+  if (!value) return true;
+  return /\*{2,}/.test(value);
+}
+
+/** Prefer the visible Career tab over the SEO "Year-By-Year Career" block (often redacted). */
+function extractPlCareerSectionHtml(html: string): string | null {
+  const $ = load(html);
+  const candidates = $("#plCareer");
+  for (let index = 0; index < candidates.length; index += 1) {
+    const element = candidates.eq(index);
+    const style = element.attr("style") ?? "";
+    if (/blur/i.test(style)) continue;
+
+    const sample = element.text();
+    if (!/Basketball Career/i.test(sample)) continue;
+
+    const careerCell = element.find("td.givebiggerfonts").first();
+    const sampleText = careerCell.length
+      ? careerCell.text()
+      : (sample.split("Year-By-Year Career")[0] ?? sample);
+    if (isRedactedCareerText(sampleText)) continue;
+
+    if (careerCell.length) {
+      return $.html(careerCell);
+    }
+    return $.html(element);
+  }
+  return null;
+}
+
+function splitMultiStintCareerBody(body: string): string[] {
+  const normalized = body.trim();
+  if (!normalized) return [];
+
+  const parts: string[] = [];
+  const splitPattern =
+    /;\s*|,\s+in\s+[A-Za-z]{3,9}\.?'?\s*\d{0,2},?\s*(?:signed at|moved to)\s+/gi;
+  let lastIndex = 0;
+
+  for (const match of normalized.matchAll(splitPattern)) {
+    if (match.index != null && match.index > lastIndex) {
+      parts.push(normalized.slice(lastIndex, match.index).trim());
+    }
+    lastIndex = match.index! + match[0].length;
+  }
+
+  const tail = normalized.slice(lastIndex).trim();
+  if (tail) parts.push(tail);
+
+  return parts.length ? parts : [normalized];
+}
+
+function careerLineMetaIsUsable(meta: CareerLineMeta | null): meta is CareerLineMeta {
+  if (!meta?.teamName || !meta.leagueText) return false;
+  if (isRedactedCareerText(meta.teamName) || isRedactedCareerText(meta.leagueText)) {
+    return false;
+  }
+  return true;
+}
+
+function parseCareerSeasonLinesFromSection(sectionHtml: string): CareerSeasonRow[] {
+  const rows: CareerSeasonRow[] = [];
+
+  for (const match of sectionHtml.matchAll(
+    /<b>(\d{4}(?:-\d{4})?):<\/b>([\s\S]*?)(?=<b>\d{4}|Player Achievements:|$)/gi,
+  )) {
+    const seasonLabel = careerSeasonLabel(match[1]);
+    if (!seasonLabel) continue;
+
+    const rawBody = normalizeCareerLineBody(stripHtmlText(truncateCareerLineHtml(match[2])));
+    if (!rawBody || /^retired$/i.test(rawBody)) continue;
+
+    for (const stintBody of splitMultiStintCareerBody(rawBody)) {
+      const meta = parseCareerLineMeta(stintBody);
+      if (!careerLineMetaIsUsable(meta)) continue;
+
+      if (!careerLineHasAnyStat(meta.statsText)) {
+        const placeholder = {
+          ...createZeroStatSeasonRow(meta.teamName, seasonLabel),
+          leagueText: meta.leagueText,
+        };
+        if (isCareerTransactionSeason(placeholder)) continue;
+        rows.push(placeholder);
+        continue;
+      }
+
+      const row = { ...buildCareerSeasonRow(seasonLabel, meta), leagueText: meta.leagueText };
+      if (isCareerTransactionSeason(row)) continue;
+      rows.push(row);
+    }
+  }
+
+  return dedupeCareerSeasonRows(rows);
+}
+
+function parseYearByYearCareerSection(html: string): CareerSeasonRow[] {
   const marker = "Year-By-Year Career";
   const start = html.indexOf(marker);
   if (start < 0) return [];
@@ -877,33 +980,18 @@ export function parseAllCareerYearByYearSeasons(html: string): CareerSeasonRow[]
     if (idx >= 0) end = Math.min(end, idx);
   }
 
-  const section = html.slice(start, end);
-  const rows: CareerSeasonRow[] = [];
+  return parseCareerSeasonLinesFromSection(html.slice(start, end));
+}
 
-  for (const match of section.matchAll(/<b>(\d{4}(?:-\d{4})?):<\/b>([\s\S]*?)(?=<b>\d{4}|$)/gi)) {
-    const seasonLabel = careerSeasonLabel(match[1]);
-    if (!seasonLabel) continue;
-
-    const body = normalizeCareerLineBody(stripHtmlText(truncateCareerLineHtml(match[2])));
-    const meta = parseCareerLineMeta(body);
-    if (!meta || !meta.teamName || !meta.leagueText) continue;
-
-    if (!careerLineHasAnyStat(meta.statsText)) {
-      const placeholder = {
-        ...createZeroStatSeasonRow(meta.teamName, seasonLabel),
-        leagueText: meta.leagueText,
-      };
-      if (isCareerTransactionSeason(placeholder)) continue;
-      rows.push(placeholder);
-      continue;
-    }
-
-    const row = { ...buildCareerSeasonRow(seasonLabel, meta), leagueText: meta.leagueText };
-    if (isCareerTransactionSeason(row)) continue;
-    rows.push(row);
+/** Parse every career line (no league filter) for career-hub routing. */
+export function parseAllCareerYearByYearSeasons(html: string): CareerSeasonRow[] {
+  const plCareerHtml = extractPlCareerSectionHtml(html);
+  if (plCareerHtml) {
+    const plRows = parseCareerSeasonLinesFromSection(plCareerHtml);
+    if (plRows.length) return plRows;
   }
 
-  return dedupeCareerSeasonRows(rows);
+  return parseYearByYearCareerSection(html);
 }
 
 function shouldReplaceCareerSeason(

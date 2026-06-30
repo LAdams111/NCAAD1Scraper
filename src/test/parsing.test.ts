@@ -20,7 +20,10 @@ import {
   parsePlayerBioFromHtml,
   parseUsbasketBirthDate,
   isPlausibleHometown,
+  extractJerseyNumber,
 } from "../scrape/playerMeta.js";
+import { normalizePosition } from "../utils/physical.js";
+import { parseJerseyFromRosterHtml } from "../usbasket/rosterJersey.js";
 import { matchBdlExternalId, buildBdlLookup, isPlausibleCollegeAge, matchExternalId } from "../scrape/linking.js";
 import { normalizeSeasonLabel, calcPct } from "../utils/season.js";
 import { normalizeUsportsTeam, isValidUsportsTeamName, isNonCcaaTeamLabel } from "../utils/usportsTeams.js";
@@ -212,9 +215,36 @@ describe("player bio parsing", () => {
     const bio = parsePlayerBioFromHtml(html, "736073", "Darius Acuff", "G");
     assert.equal(bio.birthDate, "2006-11-16");
     assert.equal(bio.displayName, "Darius Acuff");
+    assert.equal(bio.position, "G");
     assert.equal(bio.hometown, "Detroit, MI");
     assert.equal(bio.heightCm, 188);
     assert.equal(bio.weightKg, 82);
+  });
+
+  it("parses jersey number from profile FAQ", () => {
+    const html = `
+      <div id="div_faq">
+        <h3>What number did John Smith wear?</h3><p>John Smith wore number 23.</p>
+      </div>`;
+    const bio = parsePlayerBioFromHtml(html, "123", "John Smith");
+    assert.equal(bio.jerseyNumber, "23");
+  });
+
+  it("extracts jersey from uniform label and roster HTML", () => {
+    assert.equal(extractJerseyNumber("Uniform # 7", ""), "7");
+    assert.equal(
+      parseJerseyFromRosterHtml(
+        '<div class="ArRosterjersey">11</div><div class="ArRostername"><a href="/Player/555">Name</a>',
+        "555",
+      ),
+      "11",
+    );
+  });
+
+  it("normalizes usbasket position labels", () => {
+    assert.equal(normalizePosition("Guard."), "G");
+    assert.equal(normalizePosition("Point Guard"), "PG");
+    assert.equal(normalizePosition("G"), "G");
   });
 
   it("reads hometown from Born block when body text is redacted", () => {
@@ -225,6 +255,13 @@ describe("player bio parsing", () => {
       <span class="testdv"> in <a href="https://www.eurobasket.com/birth-cities/Mahon_Spain"> Mahon (Spain)</a></span></p>`;
     const bio = parsePlayerBioFromHtml(html, "66630", "Sergio Llull");
     assert.equal(bio.hometown, "Mahon (Spain)");
+  });
+
+  it("parses nationality into country", () => {
+    const html = `
+      <p><b>Nationality:</b> <img alt="Bulgarian" title="Bulgarian"> <span class="spnnationality">Bulgarian</span></p>`;
+    const bio = parsePlayerBioFromHtml(html, "304", "Veselin Veselinov");
+    assert.equal(bio.country, "Bulgarian");
   });
 
   it("returns null hometown when profile has no birth city", () => {

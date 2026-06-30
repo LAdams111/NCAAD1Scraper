@@ -38,13 +38,16 @@
     "discover:global:shard3": "node dist/discover/index.js --include-eurobasket --shard 3/4 --resume",
     "discover:global:launch": "bash scripts/start-global-discovery.sh",
     "discover:global:merge": "node scripts/merge-global-discovery.mjs",
+    "discover:global:supplement": "bash scripts/start-global-discovery-supplement.sh",
+    "discover:global:rescan-pages": "node dist/discover/index.js --include-eurobasket --rescan-completed --resume",
     "career:backfill": "node dist/career/index.js --backfill",
     "career:dry-run": "node dist/career/index.js --dry-run --backfill",
     "career:enrich": "node dist/career/index.js --backfill --enrich-existing",
     "career:backfill:shard0": "node dist/career/index.js --backfill --shard 0/4 --resume",
     "career:backfill:shard1": "node dist/career/index.js --backfill --shard 1/4 --resume",
     "career:backfill:shard2": "node dist/career/index.js --backfill --shard 2/4 --resume",
-    "career:backfill:shard3": "node dist/career/index.js --backfill --shard 3/4 --resume"
+    "career:backfill:shard3": "node dist/career/index.js --backfill --shard 3/4 --resume",
+    "career:backfill:launch": "bash scripts/start-career-backfill.sh"
   },
   "dependencies": {
     "cheerio": "^1.0.0",

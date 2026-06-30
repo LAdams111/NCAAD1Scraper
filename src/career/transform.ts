@@ -1,6 +1,6 @@
 import type { CareerPlayerSeasonRecord, CareerSeasonRow, HoopCentralIngestPayload, PlayoffStatsRow } from "../types.js";
 import { CAREER_SOURCE } from "../types.js";
-import { isCareerTransactionSeason } from "../scrape/playerSeason.js";
+import { isCareerTransactionSeason, isRedactedCareerText } from "../scrape/playerSeason.js";
 import { normalizeCareerTeam, routeLeagueTag } from "./leagueRoutes.js";
 import { applyCanonicalLeagueRoute } from "./canonicalLeagues.js";
 
@@ -22,6 +22,11 @@ export function buildCareerSeasonRecords(
       continue;
     }
 
+    if (isRedactedCareerText(season.teamName) || isRedactedCareerText(season.leagueText)) {
+      skipped += 1;
+      continue;
+    }
+
     const route = applyCanonicalLeagueRoute(routeLeagueTag(season.leagueText, options));
     if (route.skip) {
       skipped += 1;
@@ -29,6 +34,14 @@ export function buildCareerSeasonRecords(
     }
 
     const team = normalizeCareerTeam(season.teamName, route.leagueSlug);
+    if (
+      route.leagueSlug === "unknown" ||
+      route.leagueSlug === "league" ||
+      team.slug === "unknown-team"
+    ) {
+      skipped += 1;
+      continue;
+    }
 
     records.push({
       source: CAREER_SOURCE,

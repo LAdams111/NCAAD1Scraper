@@ -22,6 +22,8 @@ import {
   getCachedYearParams,
   setCachedYearParams,
 } from "../discover/yearParamsCache.js";
+import { listSegmentIndexPageUrls } from "../discover/indexPages.js";
+import { parseAllStrDataFromHtml } from "../usbasketClient.js";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -101,6 +103,38 @@ describe("global discovery year params cache", () => {
     const reloaded = JSON.parse(readFileSync(path, "utf8"));
     assert.deepEqual(reloaded.segments["usbasket:NCAA1"], ["2024", "2023"]);
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("global discovery index pages", () => {
+  it("collects linked pagination URLs for the same season", () => {
+    const html = `
+      <a href="/Spain/basketball-Players.aspx?Year=2024">1</a>
+      <a href="/Spain/basketball-Players.aspx?Year=2024&Page=2">2</a>
+      <a href="/Spain/basketball-Players.aspx?Year=2024&Page=3">3</a>
+      <a href="/Spain/basketball-Players.aspx?Year=2023&Page=2">other year</a>
+      <a href="/Spain/basketball-Players.aspx?Year=2024&women=1&Page=2">women</a>`;
+    const urls = listSegmentIndexPageUrls(
+      html,
+      "https://www.eurobasket.com/Spain/basketball-Players.aspx?Year=2024",
+    );
+    assert.deepEqual(urls, [
+      "https://www.eurobasket.com/Spain/basketball-Players.aspx?Year=2024",
+      "https://www.eurobasket.com/Spain/basketball-Players.aspx?Year=2024&Page=2",
+      "https://www.eurobasket.com/Spain/basketball-Players.aspx?Year=2024&Page=3",
+    ]);
+  });
+
+  it("unions multiple strData arrays on one index page", () => {
+    const html = `
+      strData='[{"PLAYERID":"1","PLAYERNAME":"Alpha","TEAMNAME":"A","Games":"1"}]'
+      strData='[{"PLAYERID":"2","PLAYERNAME":"Beta","TEAMNAME":"B","Games":"1"}]'`;
+    const rows = parseAllStrDataFromHtml(html);
+    assert.equal(rows.length, 2);
+    assert.deepEqual(
+      rows.map((row) => row.PLAYERID).sort(),
+      ["1", "2"],
+    );
   });
 });
 

@@ -8,6 +8,7 @@ import {
 import { loadShardCheckpoint } from "../utils/shard.js";
 import {
   buildCareerBioPayload,
+  bioToPlayerFields,
   createLinkResolver,
   type LinkResolver,
 } from "../scrape/linking.js";
@@ -37,6 +38,7 @@ import {
 import { loadCareerQueue, lookupQueueDisplayName, resolveCareerCachePaths } from "./queue.js";
 import { buildCareerSeasonRecords, toCareerIngestPayload } from "./transform.js";
 import { loadGlobalPlayerCache } from "../discover/globalCache.js";
+import { resolveJerseyFromRosters } from "../usbasket/rosterJersey.js";
 
 function careerCheckpointPath(shardIndex: number, shardCount: number): string {
   if (shardCount <= 1) return DEFAULT_CAREER_CHECKPOINT;
@@ -136,6 +138,16 @@ async function processCareerPlayer(
 }> {
   const html = await fetchProfileHtml(client, options, playerId, displayName);
   const bio: NcaaPlayerBio = parsePlayerBioFromHtml(html, playerId, displayName, null);
+
+  if (!bio.jerseyNumber && !options.useFixtures) {
+    const rosterJersey = await resolveJerseyFromRosters(
+      (url) => client.fetchHtml(url),
+      html,
+      playerId,
+    );
+    if (rosterJersey) bio.jerseyNumber = rosterJersey;
+  }
+
   const careerSeasons = parseAllCareerYearByYearSeasons(html);
 
   if (careerSeasons.length === 0) {
@@ -194,7 +206,7 @@ async function processCareerPlayer(
     };
   }
 
-  const playerFields = { displayName: bio.displayName };
+  const playerFields = bioToPlayerFields(bio, bio.displayName);
   const linkPayload = buildCareerBioPayload(bio, linkTarget ?? undefined, CAREER_SOURCE);
 
   let linked = false;

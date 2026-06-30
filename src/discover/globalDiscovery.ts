@@ -1,6 +1,7 @@
 import type { AppConfig } from "../config.js";
 import {
   listSeasonYearParams,
+  parseAllStrDataFromHtml,
   parsePlayersFromIndexHtml,
   UsbasketClient,
   UsbasketRateLimitError,
@@ -30,6 +31,7 @@ import {
   resolveDiscoverSegments,
   segmentKey,
   taskKey,
+  taskSupplementKey,
   type DiscoverSegment,
 } from "./segments.js";
 import {
@@ -41,10 +43,15 @@ import {
   setCachedYearParams,
   type YearParamsCache,
 } from "./yearParamsCache.js";
+import { listSegmentIndexPageUrls } from "./indexPages.js";
 
 export interface GlobalDiscoveryOptions {
   resume: boolean;
   fresh: boolean;
+  /** Re-fetch completed segment/season tasks (full re-ingest). */
+  rescanCompleted: boolean;
+  /** Only fetch page 2+ index URLs on already-completed tasks. */
+  supplementPagination: boolean;
   includeEurobasket: boolean;
   includeWomen: boolean;
   segmentFilter?: string;
@@ -221,6 +228,97 @@ function ingestIndexPage(
   return added;
 }
 
+async function ingestSegmentSeasonTask(
+  client: UsbasketClient,
+  cache: GlobalPlayerCache,
+  task: DiscoveryTask,
+): Promise<{
+  added: number;
+  strDataRows: number;
+  linkRows: number;
+  indexPages: number;
+}> {
+  const baseUrl = client.segmentIndexUrl(task.segment.id, task.yearParam, {
+    women: task.women,
+    host: task.segment.host,
+  });
+  const firstHtml = await client.fetchHtml(baseUrl, 8, true);
+  const pageUrls = listSegmentIndexPageUrls(firstHtml, baseUrl);
+
+  let added = 0;
+  let strDataRows = 0;
+  let linkRows = 0;
+
+  for (let pageIndex = 0; pageIndex < pageUrls.length; pageIndex += 1) {
+    const pageUrl = pageUrls[pageIndex]!;
+    const html =
+      pageIndex === 0 ? firstHtml : await client.fetchHtml(pageUrl, 8, true);
+    const rows = parseAllStrDataFromHtml(html);
+    strDataRows += rows.length;
+    linkRows += parsePlayersFromIndexHtml(html).length;
+    added += ingestIndexPage(
+      cache,
+      html,
+      task.segment,
+      task.women,
+      rows.length ? rows : null,
+    );
+  }
+
+  return { added, strDataRows, linkRows, indexPages: pageUrls.length };
+}
+
+/** Scan page 1 for pagination links; ingest page 2+ only (skip re-ingesting page 1). */
+async function ingestSegmentSeasonSupplement(
+  client: UsbasketClient,
+  cache: GlobalPlayerCache,
+  task: DiscoveryTask,
+): Promise<{
+  added: number;
+  strDataRows: number;
+  linkRows: number;
+  indexPages: number;
+  extraPages: number;
+}> {
+  const baseUrl = client.segmentIndexUrl(task.segment.id, task.yearParam, {
+    women: task.women,
+    host: task.segment.host,
+  });
+  const firstHtml = await client.fetchHtml(baseUrl, 8, true);
+  const pageUrls = listSegmentIndexPageUrls(firstHtml, baseUrl);
+  const extraUrls = pageUrls.slice(1);
+
+  if (!extraUrls.length) {
+    return { added: 0, strDataRows: 0, linkRows: 0, indexPages: pageUrls.length, extraPages: 0 };
+  }
+
+  let added = 0;
+  let strDataRows = 0;
+  let linkRows = 0;
+
+  for (const pageUrl of extraUrls) {
+    const html = await client.fetchHtml(pageUrl, 8, true);
+    const rows = parseAllStrDataFromHtml(html);
+    strDataRows += rows.length;
+    linkRows += parsePlayersFromIndexHtml(html).length;
+    added += ingestIndexPage(
+      cache,
+      html,
+      task.segment,
+      task.women,
+      rows.length ? rows : null,
+    );
+  }
+
+  return {
+    added,
+    strDataRows,
+    linkRows,
+    indexPages: pageUrls.length,
+    extraPages: extraUrls.length,
+  };
+}
+
 export async function runGlobalDiscovery(
   config: AppConfig,
   options: GlobalDiscoveryOptions,
@@ -323,7 +421,50 @@ export async function runGlobalDiscovery(
       break;
     }
 
-    if (isTaskComplete(checkpoint, task.key)) {
+    const supplementKey = taskSupplementKey(task.key);
+    const baseComplete = isTaskComplete(checkpoint, task.key);
+
+    if (options.supplementPagination) {
+      if (isTaskComplete(checkpoint, supplementKey)) {
+        tasksSkipped += 1;
+        continue;
+      }
+      if (!baseComplete) {
+        // Fall through to full ingest for any task the first pass missed.
+      } else {
+        console.log(`[discover] ${task.key} (supplement pages)`);
+        try {
+          const before = Object.keys(cache.players).length;
+          const result = await ingestSegmentSeasonSupplement(client, cache, task);
+          const after = Object.keys(cache.players).length;
+          newPlayers += after - before;
+
+          if (result.extraPages === 0) {
+            console.log(`[discover]   no extra index pages`);
+          } else {
+            console.log(
+              `[discover]   +${result.added} merge(s) from ${result.extraPages} extra page(s), ` +
+                `${result.strDataRows} strData row(s), total=${after}`,
+            );
+          }
+
+          markTaskComplete(checkpoint, supplementKey);
+          saveGlobalDiscoveryCheckpoint(checkpointPath, checkpoint);
+          if (result.added > 0) {
+            saveGlobalPlayerCache(playerCachePath, cache);
+          }
+          tasksRun += 1;
+        } catch (error) {
+          if (error instanceof UsbasketRateLimitError) throw error;
+          tasksFailed += 1;
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(`[discover]   failed: ${message}`);
+        }
+        continue;
+      }
+    }
+
+    if (baseComplete && !options.rescanCompleted) {
       tasksSkipped += 1;
       continue;
     }
@@ -332,20 +473,16 @@ export async function runGlobalDiscovery(
     console.log(`[discover] ${label}`);
 
     try {
-      const { html, rows } = await client.fetchSegmentSeasonIndex(
-        task.segment.id,
-        task.yearParam,
-        { women: task.women, host: task.segment.host },
-      );
-
       const before = Object.keys(cache.players).length;
-      const added = ingestIndexPage(cache, html, task.segment, task.women, rows);
+      const result = await ingestSegmentSeasonTask(client, cache, task);
       const after = Object.keys(cache.players).length;
       newPlayers += after - before;
 
+      const pageNote =
+        result.indexPages > 1 ? `, ${result.indexPages} index page(s)` : "";
       console.log(
-        `[discover]   +${added} merge(s), ${rows?.length ?? 0} strData row(s), ` +
-          `${parsePlayersFromIndexHtml(html).length} link(s), total=${after}`,
+        `[discover]   +${result.added} merge(s), ${result.strDataRows} strData row(s), ` +
+          `${result.linkRows} link(s)${pageNote}, total=${after}`,
       );
 
       markTaskComplete(checkpoint, task.key);

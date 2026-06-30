@@ -1,5 +1,6 @@
 import { load } from "cheerio";
 import type { NcaaPlayerBio } from "../types.js";
+import { normalizePosition } from "../utils/physical.js";
 
 const MONTHS: Record<string, string> = {
   jan: "01",
@@ -40,6 +41,29 @@ export function parseUsbasketBirthDate(raw: string): string | null {
   const day = match[2].padStart(2, "0");
   const year = match[3];
   return `${year}-${month}-${day}`;
+}
+
+export function extractJerseyNumber(html: string, text: string): string | null {
+  const patterns = [
+    /Uniform\s*#\s*:?\s*(\d{1,2})\b/i,
+    /Uniform\s*:\s*(\d{1,2})\b/i,
+    /Jersey\s*#\s*:?\s*(\d{1,2})\b/i,
+    /What number did[^?]+\?<\/h3><p>[^<]*?\b(\d{1,2})\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(html) ?? pattern.exec(text);
+    if (match) return match[1];
+  }
+
+  const $ = load(html);
+  for (const selector of [".smallerwidthplayerleftinner", ".player-details"]) {
+    const blockText = $(selector).first().text().replace(/\s+/g, " ");
+    const labelMatch = /Uniform\s*#\s*:?\s*(\d{1,2})\b/i.exec(blockText);
+    if (labelMatch) return labelMatch[1];
+  }
+
+  return null;
 }
 
 function extractBirthDateFromText(text: string): string | null {
@@ -90,6 +114,33 @@ function sanitizeHometown(value: string | null | undefined): string | null {
   if (!value) return null;
   const hometown = normalizeHometown(value);
   return isPlausibleHometown(hometown) ? hometown : null;
+}
+
+function sanitizeCountry(value: string | null | undefined): string | null {
+  const country = value?.trim();
+  if (!country || country.length > 80) return null;
+  if (/\*{2,}/.test(country)) return null;
+  if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(country)) return null;
+  return country;
+}
+
+/** usbasket/eurobasket profile Nationality line (shown as Country on Hoop Central). */
+function extractNationalityFromHtml(html: string): string | null {
+  const spanMatch =
+    /<span class="spnnationality">([^<]+)<\/span>/i.exec(html) ??
+    /<span class="nationality">([^<]+)<\/span>/i.exec(html);
+  if (spanMatch) {
+    const parsed = sanitizeCountry(spanMatch[1]);
+    if (parsed) return parsed;
+  }
+
+  const flagMatch = /Nationality:[\s\S]{0,160}?alt="([^"]+)"/i.exec(html);
+  if (flagMatch) {
+    const parsed = sanitizeCountry(flagMatch[1]);
+    if (parsed) return parsed;
+  }
+
+  return null;
 }
 
 /** Birth city from the structured Born: … in City link (works when body text is redacted). */
@@ -196,14 +247,18 @@ export function parsePlayerBioFromHtml(
     position = positionMatch[1].trim() || position;
   }
 
+  const jerseyNumber = extractJerseyNumber(html, combined);
+
   return {
     playerId,
     displayName,
     birthDate: extractBirthDateFromHtml(html) ?? extractBirthDateFromText(combined),
-    position,
+    position: normalizePosition(position),
+    jerseyNumber,
     heightCm: extractHeightCm(combined),
     weightKg: extractWeightKg(combined),
     hometown:
       extractHometownFromHtml(html) ?? extractHometownFromText(combined),
+    country: extractNationalityFromHtml(html),
   };
 }

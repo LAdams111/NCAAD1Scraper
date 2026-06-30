@@ -40,19 +40,8 @@ export function isBlockedUsbasketHtml(html: string): boolean {
   return !/<title>/i.test(html);
 }
 
-export function parseStrDataFromHtml(html: string): UsbasketIndexRow[] | null {
-  const markers = ["strData='[", 'strData="[', "strData='[", 'strData=[', "strData=["];
-  let start = -1;
-  for (const marker of markers) {
-    const idx = html.indexOf(marker);
-    if (idx >= 0) {
-      start = idx;
-      break;
-    }
-  }
-  if (start < 0) return null;
-
-  const bracketStart = html.indexOf("[", start);
+function parseJsonArrayAt(html: string, markerIndex: number): UsbasketIndexRow[] | null {
+  const bracketStart = html.indexOf("[", markerIndex);
   if (bracketStart < 0) return null;
 
   let i = bracketStart;
@@ -93,10 +82,50 @@ export function parseStrDataFromHtml(html: string): UsbasketIndexRow[] | null {
   if (!raw.startsWith("[")) return null;
 
   try {
-    return JSON.parse(raw) as UsbasketIndexRow[];
+    const parsed = JSON.parse(raw) as UsbasketIndexRow[];
+    return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
+}
+
+const STR_DATA_MARKERS = ["strData='[", 'strData="[', "strData=[", 'strData=["'] as const;
+
+/** Union every embedded strData JSON array on an index page (deduped by PLAYERID). */
+export function parseAllStrDataFromHtml(html: string): UsbasketIndexRow[] {
+  const byId = new Map<string, UsbasketIndexRow>();
+  let searchFrom = 0;
+
+  while (searchFrom < html.length) {
+    let bestIndex = -1;
+    let bestMarker = "";
+    for (const marker of STR_DATA_MARKERS) {
+      const idx = html.indexOf(marker, searchFrom);
+      if (idx >= 0 && (bestIndex < 0 || idx < bestIndex)) {
+        bestIndex = idx;
+        bestMarker = marker;
+      }
+    }
+    if (bestIndex < 0) break;
+
+    const rows = parseJsonArrayAt(html, bestIndex);
+    if (rows?.length) {
+      for (const row of rows) {
+        const playerId = row.PLAYERID?.trim();
+        if (!playerId || byId.has(playerId)) continue;
+        byId.set(playerId, row);
+      }
+    }
+
+    searchFrom = bestIndex + bestMarker.length;
+  }
+
+  return [...byId.values()];
+}
+
+export function parseStrDataFromHtml(html: string): UsbasketIndexRow[] | null {
+  const rows = parseAllStrDataFromHtml(html);
+  return rows.length ? rows : null;
 }
 
 const PLAYER_LINK_PATTERN =

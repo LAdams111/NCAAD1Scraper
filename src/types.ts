@@ -68,9 +68,12 @@ export interface NcaaPlayerBio {
   displayName: string;
   birthDate: string | null;
   position: string | null;
+  jerseyNumber: string | null;
   heightCm: number | null;
   weightKg: number | null;
   hometown: string | null;
+  /** usbasket "Nationality" field (e.g. Bulgarian) → stored as HC country */
+  country: string | null;
 }
 
 export interface HoopCentralBioPayload {
@@ -80,9 +83,11 @@ export interface HoopCentralBioPayload {
     displayName: string;
     birthDate?: string | null;
     position?: string | null;
+    jerseyNumber?: string | null;
     heightCm?: number | null;
     weightKg?: number | null;
     hometown?: string | null;
+    country?: string | null;
     headshotUrl?: string | null;
   };
   linkTo?: {
